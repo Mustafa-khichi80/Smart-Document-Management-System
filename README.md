@@ -1,10 +1,10 @@
 <div align="center">
 
-# 🌐 Universal Converter V3
+# Universal Converter V3
 
 <img src="screenshot/s1.png" alt="Universal Converter Dark Mode" width="700"/>
 
-### ⚡ Secure, Fast, and Modern File Converter
+### Secure, Fast, and Modern File Converter
 
 [![Version](https://img.shields.io/badge/Version-3.0.0-blue.svg)](https://github.com/YusufEren97/universal-file-converter)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
@@ -13,19 +13,19 @@
 
 **Your files never leave your device. 100% local, 100% private.**
 
-[🇬🇧 English](#-features) • [🇹🇷 Türkçe](#-özellikler-tr) • [🇩🇪 Deutsch](#-funktionen-de) • [🇨🇳 中文](#-功能-zh)
+[English](#-features) • [Türkçe](#-özellikler-tr) • [Deutsch](#-funktionen-de) • [中文](#-功能-zh)
 
 </div>
 
 ---
 
-## ✨ Features
+## Features
 
 <table>
 <tr>
 <td width="50%">
 
-### 🎯 Core Features
+### Core Features
 - **65+ Format Support** - Image, Video, Audio, Document, Archive
 - **100% Local Processing** - No cloud, no upload, complete privacy
 - **GPU Accelerated** - Lightning fast conversion with FFmpeg
@@ -36,13 +36,13 @@
 </td>
 <td width="50%">
 
-### 🌍 Multi-Language
+### Multi-Language
 - 🇬🇧 English
 - 🇹🇷 Türkçe  
 - 🇩🇪 Deutsch
 - 🇨🇳 中文
 
-### 🎨 Theme Support
+### Theme Support
 Light & Dark mode with automatic theme detection
 
 </td>
@@ -55,26 +55,26 @@ Light & Dark mode with automatic theme detection
 
 ---
 
-## 📁 Supported Formats
+## Supported Formats
 
 | Category | Input Formats | Output Formats |
 |----------|---------------|----------------|
-| **🖼️ Image** | JPG, PNG, WEBP, HEIC, SVG, ICO, TIFF, BMP, GIF, AVIF | JPG, PNG, WEBP, GIF, BMP, TIFF, ICO, PDF |
-| **🎬 Video** | MP4, MKV, AVI, MOV, WEBM, WMV, FLV, M4V, 3GP | MP4, MKV, AVI, MOV, WEBM, GIF, MP3, WAV |
-| **🎵 Audio** | MP3, WAV, FLAC, M4A, OGG, AAC, AIFF, OPUS | MP3, WAV, AAC, OGG, FLAC, M4A |
-| **📄 Document** | PDF, DOCX, PPTX | PDF, DOCX, TXT, HTML, MD, PNG, JPG |
-| **📊 Data** | CSV, XLSX, JSON, XML, HTML, TXT | CSV, XLSX, JSON, XML, HTML, TXT |
-| **📦 Archive** | ZIP, 7Z, TAR, GZ, TGZ, TAR.GZ, TAR.BZ2 | ZIP, 7Z, TAR |
+| **Image** | JPG, PNG, WEBP, HEIC, SVG, ICO, TIFF, BMP, GIF, AVIF | JPG, PNG, WEBP, GIF, BMP, TIFF, ICO, PDF |
+| **Video** | MP4, MKV, AVI, MOV, WEBM, WMV, FLV, M4V, 3GP | MP4, MKV, AVI, MOV, WEBM, GIF, MP3, WAV |
+| **Audio** | MP3, WAV, FLAC, M4A, OGG, AAC, AIFF, OPUS | MP3, WAV, AAC, OGG, FLAC, M4A |
+| **Document** | PDF, DOCX, PPTX | PDF, DOCX, TXT, HTML, MD, PNG, JPG |
+| **Data** | CSV, XLSX, JSON, XML, HTML, TXT | CSV, XLSX, JSON, XML, HTML, TXT |
+| **Archive** | ZIP, 7Z, TAR, GZ, TGZ, TAR.GZ, TAR.BZ2 | ZIP, 7Z, TAR |
 
 ---
 
-## 🚀 Quick Start
+## Quick Start
 
 ### Prerequisites
 - **Python 3.12+** - [Download](https://www.python.org/downloads/)
 - **FFmpeg** (for Video/Audio) - [Download](https://ffmpeg.org/download.html)
 
-> ⚠️ **Önemli:** `pdf2docx` kütüphanesi `numpy>=2.0` ile uyumsuz. requirements.txt'de `numpy<2.0` olarak sabitlenmiştir.
+> **Note:** `pdf2docx` is incompatible with `numpy>=2.0`. It's pinned to `numpy<2.0` in requirements.txt.
 
 ### Installation
 
@@ -92,12 +92,12 @@ python -m uvicorn app.main:app --port 1453
 
 Or simply double-click **`Start.bat`** on Windows.
 
-### 📍 Access
+### Access
 Open your browser: **http://localhost:1453**
 
 ---
 
-## 🛠️ Tech Stack
+## Tech Stack
 
 | Component | Technology |
 |-----------|------------|
@@ -108,7 +108,7 @@ Open your browser: **http://localhost:1453**
 
 ---
 
-## 📂 Project Structure
+## Project Structure
 
 ```
 universal-converter/
@@ -135,7 +135,7 @@ universal-converter/
 
 ---
 
-## 🔧 Configuration
+## Configuration
 
 | Variable | Default | Description |
 |----------|---------|-------------|
@@ -145,7 +145,7 @@ universal-converter/
 
 ---
 
-## 📜 License
+## License
 
 This project is licensed under the **MIT License** - see the [LICENSE](LICENSE) file for details.
 
@@ -153,8 +153,11 @@ This project is licensed under the **MIT License** - see the [LICENSE](LICENSE) 
 
 <div align="center">
 
-### Made with ❤️ by Yusuf Eren Seyrek
+## Author
 
-[![GitHub](https://img.shields.io/badge/GitHub-YusufEren97-black?logo=github)](https://github.com/YusufEren97)
+| <img src="https://github.com/YusufEren97.png" width="120" style="border-radius:50%"/> |
+|:---:|
+| **Yusuf Eren Seyrek** |
+| [![GitHub](https://img.shields.io/badge/GitHub-YusufEren97-black?logo=github)](https://github.com/YusufEren97) |
 
 </div>
