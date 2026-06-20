@@ -59,20 +59,52 @@ def _pdf_to_docx(input_path: str, output_path: str, output_filename: str) -> dic
         return _pdf_to_docx_fallback(input_path, output_path, output_filename, str(e))
 
 
-def _pdf_to_docx_fallback(input_path: str, output_path: str, output_filename: str, original_error: str) -> dict:
-    """Fallback: Basic PDF to DOCX conversion using PyPDF2 + python-docx."""
+def _extract_pdf_text_with_ocr_fallback(input_path: str) -> str:
+    """Helper to extract text from PDF, falling back to OCR if empty."""
+    import PyPDF2
+    text_content = ""
     try:
-        import PyPDF2
-        from docx import Document
-        
-        text_content = ""
         with open(input_path, 'rb') as pdf_file:
             pdf_reader = PyPDF2.PdfReader(pdf_file)
             for page in pdf_reader.pages:
                 page_text = page.extract_text()
                 if page_text:
-                    text_content += page_text + "\n\n"
+                    text_content += page_text + "\n"
+    except Exception as e:
+        print(f"PyPDF2 text extraction error: {e}")
         
+    if not text_content.strip():
+        # Scanned PDF OCR fallback
+        try:
+            import fitz
+            import pytesseract
+            from PIL import Image
+            from io import BytesIO
+            
+            pytesseract.pytesseract.tesseract_cmd = r'C:\Program Files\Tesseract-OCR\tesseract.exe'
+            pdf_doc = fitz.open(input_path)
+            ocr_text = []
+            for page in pdf_doc:
+                pix = page.get_pixmap(dpi=150)
+                img_data = pix.tobytes("png")
+                img = Image.open(BytesIO(img_data))
+                page_text = pytesseract.image_to_string(img)
+                if page_text:
+                    ocr_text.append(page_text)
+            pdf_doc.close()
+            text_content = "\n\n".join(ocr_text)
+        except Exception as ocr_err:
+            print(f"OCR fallback error: {ocr_err}")
+            
+    return text_content
+
+
+def _pdf_to_docx_fallback(input_path: str, output_path: str, output_filename: str, original_error: str) -> dict:
+    """Fallback: Basic PDF to DOCX conversion using PyPDF2 + python-docx with OCR fallback."""
+    try:
+        from docx import Document
+        
+        text_content = _extract_pdf_text_with_ocr_fallback(input_path)
         if not text_content.strip():
             return {"success": False, "error": f"Could not extract text from PDF. Original error: {original_error}"}
         
@@ -86,30 +118,17 @@ def _pdf_to_docx_fallback(input_path: str, output_path: str, output_filename: st
             "success": True, 
             "output_path": output_path, 
             "filename": output_filename,
-            "note": "Basic text extraction used (formatting may be limited)"
+            "note": "Text extraction (with OCR fallback) used for DOCX"
         }
     except Exception as e:
         return {"success": False, "error": f"PDF conversion failed: {str(e)}"}
 
 
 def _pdf_to_txt(input_path: str, output_path: str, output_filename: str) -> dict:
-    """Extract text from PDF."""
-    try:
-        import PyPDF2
-    except ImportError:
-        return {"success": False, "error": "PyPDF2 not installed. Run 'pip install PyPDF2'"}
-
-    text_content = ""
-    
-    with open(input_path, 'rb') as pdf_file:
-        pdf_reader = PyPDF2.PdfReader(pdf_file)
-        for i, page in enumerate(pdf_reader.pages):
-            page_text = page.extract_text()
-            if page_text:
-                text_content += f"--- Page {i+1} ---\n{page_text}\n\n"
-
+    """Extract text from PDF with OCR fallback."""
+    text_content = _extract_pdf_text_with_ocr_fallback(input_path)
     if not text_content.strip():
-        return {"success": False, "error": "Could not extract text from PDF (may be image-based)"}
+        return {"success": False, "error": "Could not extract text from PDF (may be image-based and OCR found no text)"}
 
     with open(output_path, 'w', encoding='utf-8') as f:
         f.write(text_content)
@@ -118,22 +137,10 @@ def _pdf_to_txt(input_path: str, output_path: str, output_filename: str) -> dict
 
 
 def _pdf_to_html(input_path: str, output_path: str, output_filename: str, name: str) -> dict:
-    """Convert PDF to HTML."""
-    try:
-        import PyPDF2
-    except ImportError:
-        return {"success": False, "error": "PyPDF2 not installed. Run 'pip install PyPDF2'"}
-
-    text_content = ""
-    with open(input_path, 'rb') as pdf_file:
-        pdf_reader = PyPDF2.PdfReader(pdf_file)
-        for page in pdf_reader.pages:
-            page_text = page.extract_text()
-            if page_text:
-                text_content += page_text + "\n\n"
-
+    """Convert PDF to HTML with OCR fallback."""
+    text_content = _extract_pdf_text_with_ocr_fallback(input_path)
     if not text_content.strip():
-        return {"success": False, "error": "Could not extract text from PDF (may be image-based)"}
+        return {"success": False, "error": "Could not extract text from PDF (may be image-based and OCR found no text)"}
 
     html_content = f"""<!DOCTYPE html>
 <html lang="en">
@@ -167,22 +174,10 @@ def _pdf_to_html(input_path: str, output_path: str, output_filename: str, name: 
 
 
 def _pdf_to_md(input_path: str, output_path: str, output_filename: str, name: str) -> dict:
-    """Convert PDF to Markdown."""
-    try:
-        import PyPDF2
-    except ImportError:
-        return {"success": False, "error": "PyPDF2 not installed. Run 'pip install PyPDF2'"}
-
-    text_content = ""
-    with open(input_path, 'rb') as pdf_file:
-        pdf_reader = PyPDF2.PdfReader(pdf_file)
-        for page in pdf_reader.pages:
-            page_text = page.extract_text()
-            if page_text:
-                text_content += page_text + "\n\n"
-
+    """Convert PDF to Markdown with OCR fallback."""
+    text_content = _extract_pdf_text_with_ocr_fallback(input_path)
     if not text_content.strip():
-        return {"success": False, "error": "Could not extract text from PDF (may be image-based)"}
+        return {"success": False, "error": "Could not extract text from PDF (may be image-based and OCR found no text)"}
 
     md_content = f"# {name}\n\n"
     for para in text_content.split('\n'):
@@ -196,22 +191,10 @@ def _pdf_to_md(input_path: str, output_path: str, output_filename: str, name: st
 
 
 def _pdf_to_rtf(input_path: str, output_path: str, output_filename: str) -> dict:
-    """Convert PDF to RTF."""
-    try:
-        import PyPDF2
-    except ImportError:
-        return {"success": False, "error": "PyPDF2 not installed. Run 'pip install PyPDF2'"}
-
-    text_content = ""
-    with open(input_path, 'rb') as pdf_file:
-        pdf_reader = PyPDF2.PdfReader(pdf_file)
-        for page in pdf_reader.pages:
-            page_text = page.extract_text()
-            if page_text:
-                text_content += page_text + "\n\n"
-
+    """Convert PDF to RTF with OCR fallback."""
+    text_content = _extract_pdf_text_with_ocr_fallback(input_path)
     if not text_content.strip():
-        return {"success": False, "error": "Could not extract text from PDF (may be image-based)"}
+        return {"success": False, "error": "Could not extract text from PDF (may be image-based and OCR found no text)"}
 
     rtf_content = "{\\rtf1\\ansi\\deff0\n"
     for para in text_content.split('\n'):

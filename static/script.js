@@ -15,7 +15,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     await setLanguage(currentLang);
     const savedTheme = localStorage.getItem('theme') || 'dark';
     applyTheme(savedTheme);
-    checkFFmpeg();
     initBatchDropdown();
 });
 
@@ -45,22 +44,11 @@ async function initLanguages() {
     }
 }
 
-async function checkFFmpeg() {
-    try {
-        const res = await fetch('/api/check-ffmpeg');
-        const data = await res.json();
-        if (!data.installed) {
-            showToast(t('toasts.ffmpegMissing') || '⚠️ FFmpeg not found!');
-        }
-    } catch {
-        // Silent fail
-    }
-}
 
 // --- Language System ---
 async function loadTranslations(lang) {
     try {
-        const res = await fetch(`/static/locales/${lang}.json`);
+        const res = await fetch(`/static/locales/${lang}.json?v=1.0.3`);
         if (!res.ok) throw new Error('Language not found');
         translations[lang] = await res.json();
     } catch (e) {
@@ -308,6 +296,11 @@ function updateCardWithOptions(id, data) {
         </div>
         <div class="file-actions" id="actions-${id}">
             <div id="select-wrapper-${id}" style="min-width: 140px;"></div>
+            ${['image', 'pdf', 'docx', 'pptx', 'data'].includes(data.type.toLowerCase()) ? `
+                <button onclick="openInWorkspace('${id}')" class="btn btn-secondary btn-sm flex items-center gap-1">
+                    <span>📝</span> <span>Edit</span>
+                </button>
+            ` : ''}
             <button onclick="startConversion('${id}', '${data.filename}')" class="btn btn-primary btn-sm">
                 ${t('buttons.convert')}
             </button>
@@ -454,10 +447,16 @@ function getAvailableBatchFormats() {
     if (!commonFormats || commonFormats.size === 0) return [];
 
     // Convert to array - NO GROUP to avoid "groups.common" issue
-    return Array.from(commonFormats).map(f => ({
-        value: f,
-        text: f.toUpperCase()
-    }));
+    return Array.from(commonFormats).map(f => {
+        let label = f.toUpperCase();
+        if (f === 'txt_ocr') label = 'TXT (OCR)';
+        else if (f === 'docx_ocr') label = 'DOCX (OCR)';
+        else if (f === 'pdf_ocr') label = 'PDF (OCR)';
+        return {
+            value: f,
+            text: label
+        };
+    });
 }
 
 function updateBatchDropdownUI() {
@@ -469,9 +468,7 @@ function updateBatchDropdownUI() {
 function getFormatOptions(type) {
     // Returns array of {value, text, group}
     const map = {
-        image: ['webp', 'png', 'jpg', 'gif', 'bmp', 'tiff', 'ico', 'pdf'],
-        video: ['mp4', 'webm', 'avi', 'mkv', 'mov', 'gif', 'mp3', 'wav'],
-        audio: ['mp3', 'wav', 'aac', 'ogg', 'flac', 'm4a'],
+        image: ['webp', 'png', 'jpg', 'gif', 'bmp', 'tiff', 'ico', 'pdf', 'txt_ocr', 'docx_ocr', 'pdf_ocr'],
         data: ['csv', 'xlsx', 'json', 'xml', 'html', 'txt'],
         pdf: ['docx', 'txt', 'html', 'md', 'png', 'jpg'],
         docx: ['pdf', 'txt', 'html', 'md'],
@@ -480,11 +477,17 @@ function getFormatOptions(type) {
     };
 
     const list = map[type.toLowerCase()] || ['txt'];
-    return list.map(f => ({
-        value: f,
-        text: f.toUpperCase(),
-        group: type.toLowerCase()
-    }));
+    return list.map(f => {
+        let label = f.toUpperCase();
+        if (f === 'txt_ocr') label = 'TXT (OCR)';
+        else if (f === 'docx_ocr') label = 'DOCX (OCR)';
+        else if (f === 'pdf_ocr') label = 'PDF (OCR)';
+        return {
+            value: f,
+            text: label,
+            group: type.toLowerCase()
+        };
+    });
 }
 
 function getAllFormatsGrouped() {
@@ -495,8 +498,6 @@ function getAllFormatsGrouped() {
 function getIconForType(type) {
     const icons = {
         image: '🖼️',
-        video: '🎬',
-        audio: '🎵',
         pdf: '📕',
         docx: '📄',
         pptx: '📊',
@@ -730,5 +731,409 @@ async function downloadAll() {
 function checkDownloadAllButton() {
     if (document.querySelectorAll('a[download]').length > 0) {
         document.getElementById('btn-download-all')?.classList.remove('hidden');
+    }
+}
+
+// --- AI Workspace and Settings Modal Implementation ---
+
+let activeWorkspaceFileId = null;
+let workspaceFiles = new Map(); // fileId -> fileData
+let manualEditMode = false;
+
+// 1. Settings Modal Controls
+function openSettingsModal() {
+    const modal = document.getElementById('settings-modal');
+    const input = document.getElementById('gemini-key-input');
+    if (modal && input) {
+        input.value = localStorage.getItem('gemini_api_key') || '';
+        modal.classList.remove('hidden');
+    }
+}
+
+function closeSettingsModal() {
+    const modal = document.getElementById('settings-modal');
+    if (modal) modal.classList.add('hidden');
+}
+
+function saveSettings() {
+    const input = document.getElementById('gemini-key-input');
+    if (input) {
+        const key = input.value.trim();
+        localStorage.setItem('gemini_api_key', key);
+        showToast('Settings saved successfully!');
+        closeSettingsModal();
+    }
+}
+
+// 2. Toggle Views
+function toggleWorkspace() {
+    const isWorkspaceVisible = !document.getElementById('workspace-section').classList.contains('hidden');
+    const toggleBtn = document.getElementById('btn-workspace-toggle');
+    const toggleText = document.getElementById('toggle-btn-text');
+
+    if (isWorkspaceVisible) {
+        // Switch back to Main Converter
+        document.getElementById('workspace-section').classList.add('hidden');
+        document.getElementById('hero-section').classList.remove('hidden');
+        
+        // If files are loaded, keep processing area open
+        if (fileRegistry.size > 0) {
+            processingArea.classList.remove('hidden');
+            dropZone.classList.add('hidden');
+        } else {
+            dropZone.classList.remove('hidden');
+            processingArea.classList.add('hidden');
+        }
+        document.getElementById('features-section').classList.remove('hidden');
+        
+        if (toggleBtn && toggleText) {
+            toggleBtn.className = "btn btn-secondary btn-sm mr-2 flex items-center gap-1 font-medium";
+            toggleText.textContent = "AI Workspace";
+        }
+    } else {
+        // Switch to AI Workspace view
+        document.getElementById('workspace-section').classList.remove('hidden');
+        document.getElementById('hero-section').classList.add('hidden');
+        dropZone.classList.add('hidden');
+        processingArea.classList.add('hidden');
+        document.getElementById('features-section').classList.add('hidden');
+        
+        if (toggleBtn && toggleText) {
+            toggleBtn.className = "btn btn-primary btn-sm mr-2 flex items-center gap-1 font-semibold";
+            toggleText.textContent = "Exit Workspace";
+        }
+        
+        // Sync document lists
+        syncWorkspaceDocumentList();
+    }
+}
+
+// 3. Document Sync
+function syncWorkspaceDocumentList() {
+    const fileListContainer = document.getElementById('workspace-file-list');
+    if (!fileListContainer) return;
+    
+    fileListContainer.innerHTML = '';
+    
+    // Convert fileRegistry Map into UI list
+    if (fileDataStore.size === 0) {
+        fileListContainer.innerHTML = `
+            <div class="no-files-placeholder text-center text-xs text-muted py-6">
+                No documents loaded.<br>Upload a file or click Open in Workspace.
+            </div>
+        `;
+        return;
+    }
+    
+    fileDataStore.forEach((data, id) => {
+        const icon = getIconForType(data.type);
+        const isActive = activeWorkspaceFileId === id;
+        
+        const item = document.createElement('div');
+        item.className = `workspace-file-item ${isActive ? 'active' : ''}`;
+        item.onclick = () => loadDocumentIntoEditor(id);
+        item.innerHTML = `
+            <span class="mr-2">${icon}</span>
+            <span class="file-name" title="${data.original_name}">${data.original_name}</span>
+        `;
+        fileListContainer.appendChild(item);
+    });
+}
+
+// 4. Open file in Workspace
+function openInWorkspace(id) {
+    activeWorkspaceFileId = id;
+    
+    // Ensure we are in workspace view
+    const isWorkspaceVisible = !document.getElementById('workspace-section').classList.contains('hidden');
+    if (!isWorkspaceVisible) {
+        toggleWorkspace();
+    } else {
+        syncWorkspaceDocumentList();
+        loadDocumentIntoEditor(id);
+    }
+}
+
+// 5. Load Document Text
+async function loadDocumentIntoEditor(id) {
+    activeWorkspaceFileId = id;
+    syncWorkspaceDocumentList();
+    
+    const data = fileDataStore.get(id);
+    if (!data) return;
+    
+    // Set UI details
+    document.getElementById('editor-file-name').textContent = data.original_name;
+    document.getElementById('editor-file-icon').textContent = getIconForType(data.type);
+    
+    const badge = document.getElementById('editor-file-badge');
+    badge.textContent = data.extension.replace('.', '').toUpperCase();
+    
+    // Enable/disable OCR button
+    const ocrBtn = document.getElementById('btn-run-ocr');
+    if (ocrBtn) {
+        const isImage = data.type.toLowerCase() === 'image';
+        ocrBtn.disabled = !isImage;
+    }
+    
+    // Lock manual edits by default
+    setManualEdit(false);
+    
+    const textarea = document.getElementById('editor-textarea');
+    textarea.value = 'Loading text content...';
+    updateGutter();
+    
+    try {
+        const res = await fetch('/api/document/text', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ file_path: data.filename })
+        });
+        
+        const result = await res.json();
+        if (result.success) {
+            textarea.value = result.text || '';
+        } else {
+            textarea.value = `Error loading file content: ${result.error}`;
+        }
+    } catch (e) {
+        textarea.value = 'Network error loading file content.';
+    }
+    
+    updateGutter();
+    updateStats();
+}
+
+// 6. Editor controls
+function syncEditorScroll() {
+    const textarea = document.getElementById('editor-textarea');
+    const gutter = document.getElementById('editor-gutter');
+    if (textarea && gutter) {
+        gutter.scrollTop = textarea.scrollTop;
+    }
+}
+
+// We want line numbers to align perfectly with paragraphs in layout
+function updateGutter() {
+    const textarea = document.getElementById('editor-textarea');
+    const gutter = document.getElementById('editor-gutter');
+    if (!textarea || !gutter) return;
+    
+    const lines = textarea.value.split('\n');
+    const lineCount = Math.max(1, lines.length);
+    
+    let gutterHTML = '';
+    for (let i = 1; i <= lineCount; i++) {
+        gutterHTML += `<div>${i}</div>`;
+    }
+    gutter.innerHTML = gutterHTML;
+}
+
+function updateStats() {
+    const textarea = document.getElementById('editor-textarea');
+    if (!textarea) return;
+    
+    const text = textarea.value;
+    const lines = text.split('\n').length;
+    const words = text.trim() === '' ? 0 : text.trim().split(/\s+/).length;
+    const chars = text.length;
+    
+    document.getElementById('stat-lines').textContent = lines;
+    document.getElementById('stat-words').textContent = words;
+    document.getElementById('stat-chars').textContent = chars;
+}
+
+function handleEditorInput() {
+    updateGutter();
+    updateStats();
+}
+
+// 7. Manual Edit Mode
+function toggleManualEdit() {
+    setManualEdit(!manualEditMode);
+}
+
+function setManualEdit(active) {
+    manualEditMode = active;
+    const textarea = document.getElementById('editor-textarea');
+    const btn = document.getElementById('btn-manual-edit-toggle');
+    
+    if (textarea && btn) {
+        if (manualEditMode) {
+            textarea.readOnly = false;
+            textarea.classList.add('manual-edit-active');
+            btn.innerHTML = `
+                <svg class="w-3 h-3 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 11V7a4 4 0 118 0m-4 8v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2z"/></svg>
+                <span>Lock Editor</span>
+            `;
+            textarea.focus();
+        } else {
+            textarea.readOnly = true;
+            textarea.classList.remove('manual-edit-active');
+            btn.innerHTML = `
+                <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"/></svg>
+                <span>Edit Manually</span>
+            `;
+        }
+    }
+}
+
+// 8. OCR Trigger
+async function runOCRTextExtraction() {
+    if (!activeWorkspaceFileId) return;
+    const data = fileDataStore.get(activeWorkspaceFileId);
+    if (!data) return;
+    
+    const ocrBtn = document.getElementById('btn-run-ocr');
+    const textarea = document.getElementById('editor-textarea');
+    
+    if (ocrBtn && textarea) {
+        const originalText = ocrBtn.innerHTML;
+        ocrBtn.disabled = true;
+        ocrBtn.innerHTML = `⏳ Extracting...`;
+        
+        try {
+            const res = await fetch('/api/ocr/extract', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ file_path: data.filename })
+            });
+            const result = await res.json();
+            if (result.success) {
+                textarea.value = result.text || '';
+                showToast('Text extracted successfully!');
+            } else {
+                showToast(`OCR failed: ${result.error}`);
+            }
+        } catch {
+            showToast('Network error extracting text.');
+        } finally {
+            ocrBtn.disabled = false;
+            ocrBtn.innerHTML = originalText;
+            updateGutter();
+            updateStats();
+        }
+    }
+}
+
+// 9. AI prompt execution
+async function sendAIPrompt() {
+    const promptInput = document.getElementById('ai-prompt-input');
+    const textarea = document.getElementById('editor-textarea');
+    const btnSend = document.getElementById('btn-send-ai');
+    
+    if (!promptInput || !textarea) return;
+    const promptValue = promptInput.value.trim();
+    if (promptValue === '') return;
+    
+    const textValue = textarea.value;
+    const apiKey = localStorage.getItem('gemini_api_key') || '';
+    
+    // Get active file name
+    const activeFile = fileDataStore.get(activeWorkspaceFileId);
+    const filename = activeFile ? activeFile.filename : null;
+    
+    // Disable inputs
+    promptInput.disabled = true;
+    btnSend.disabled = true;
+    const originalBtnHTML = btnSend.innerHTML;
+    btnSend.innerHTML = `<span>Editing...</span>`;
+    
+    // Glow effect
+    document.querySelector('.ai-input-wrapper')?.classList.add('animate-pulse');
+    
+    try {
+        const res = await fetch('/api/ai/edit', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                text: textValue,
+                prompt: promptValue,
+                api_key: apiKey,
+                filename: filename
+            })
+        });
+        
+        const result = await res.json();
+        if (result.success) {
+            textarea.value = result.text || '';
+            promptInput.value = '';
+            showToast('Document updated by AI!');
+        } else {
+            showToast(`AI error: ${result.error}`);
+            // If it is a key error, open settings modal automatically
+            if (result.error.includes('API Key is missing')) {
+                openSettingsModal();
+            }
+        }
+    } catch {
+        showToast('Network error during AI edits.');
+    } finally {
+        promptInput.disabled = false;
+        btnSend.disabled = false;
+        btnSend.innerHTML = originalBtnHTML;
+        document.querySelector('.ai-input-wrapper')?.classList.remove('animate-pulse');
+        updateGutter();
+        updateStats();
+    }
+}
+
+function applyQuickPrompt(instruction) {
+    const promptInput = document.getElementById('ai-prompt-input');
+    if (promptInput) {
+        promptInput.value = instruction;
+        promptInput.focus();
+    }
+}
+
+// 10. Export / Save Document
+async function exportDocument() {
+    if (!activeWorkspaceFileId) return showToast('No document loaded to export');
+    
+    const data = fileDataStore.get(activeWorkspaceFileId);
+    if (!data) return;
+    
+    const textarea = document.getElementById('editor-textarea');
+    const select = document.getElementById('export-format-select');
+    const btnExport = document.getElementById('btn-export-doc');
+    
+    if (!textarea || !select) return;
+    
+    const textValue = textarea.value;
+    const targetFormat = select.value;
+    
+    const originalBtnHTML = btnExport.innerHTML;
+    btnExport.disabled = true;
+    btnExport.innerHTML = `⏳ Saving...`;
+    
+    try {
+        const res = await fetch('/api/document/save', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                text: textValue,
+                filename: data.original_name,
+                target_format: targetFormat
+            })
+        });
+        
+        const result = await res.json();
+        if (result.success) {
+            // Trigger download
+            const a = document.createElement('a');
+            a.href = result.url;
+            a.download = result.filename;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            showToast('Document exported successfully!');
+        } else {
+            showToast(`Export failed: ${result.error}`);
+        }
+    } catch {
+        showToast('Network error exporting document.');
+    } finally {
+        btnExport.disabled = false;
+        btnExport.innerHTML = originalBtnHTML;
     }
 }

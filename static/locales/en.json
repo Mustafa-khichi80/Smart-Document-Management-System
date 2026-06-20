@@ -1,13 +1,13 @@
 {
-    "title": "Universal Converter",
-    "heroTitle": "Convert Anything ⚡",
+    "title": "Smart Document Management",
+    "heroTitle": "Smart Document Management ⚡",
     "heroSubtitle": "Secure, Fast and Modern. Your files never leave your device.",
     "dropText": "Drop Files Here",
     "browseText": "or click to browse",
     "features": {
         "formats": {
-            "title": "65+ Formats",
-            "desc": "Image, Video, Audio, Doc, Archive."
+            "title": "Documents & Images",
+            "desc": "Image, PDF, Word, PowerPoint, XML, Data."
         },
         "fast": {
             "title": "Lightning Fast",
@@ -37,15 +37,12 @@
     "applyAll": "Apply All",
     "groups": {
         "image": "📸 Image",
-        "video": "🎬 Video",
-        "audio": "🎵 Audio",
         "document": "📄 Document",
         "pdf": "📕 PDF",
         "archive": "📦 Archive",
         "data": "📊 Data"
     },
     "toasts": {
-        "ffmpegMissing": "⚠️ FFmpeg not found! Video conversion disabled.",
         "downloadStarted": "Batch download started!",
         "zipError": "Error: Could not create Zip",
         "connError": "Connection error",

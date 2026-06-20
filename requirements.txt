@@ -1,4 +1,4 @@
-# Universal Converter V3.0.0 - Python 3.12+
+# Smart Document Management V1.0.0 - Python 3.12+
 # ==========================================
 # Kurulum: pip install -r requirements.txt -q
 
@@ -15,7 +15,7 @@ lxml
 
 # === NUMPY UYARISI ===
 # pdf2docx numpy>=2.0 ile uyumsuz, bu yüzden sınırlıyoruz
-numpy<2.0
+numpy
 
 # === Gelişmiş Belge Dönüştürme ===
 pdf2docx
@@ -31,3 +31,8 @@ cairosvg
 
 # === Windows Özel (PPTX/DOCX → PDF) ===
 comtypes; platform_system == "Windows"
+
+pytesseract
+Pillow
+google-generativeai
+

@@ -5,9 +5,9 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="description"
-        content="Universal Converter V3 - Convert any file format locally. Fast, secure, and private.">
+        content="Smart Document Management - Convert and edit documents and images locally. Fast, secure, and private.">
     <meta name="theme-color" content="#000000">
-    <title>Universal Converter V3</title>
+    <title>Smart Document Management</title>
 
     <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
@@ -32,7 +32,7 @@
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 
     <!-- Styles -->
-    <link rel="stylesheet" href="/static/style.css">
+    <link rel="stylesheet" href="/static/style.css?v=1.0.3">
 </head>
 
 <body>
@@ -51,10 +51,16 @@
                     <div class="traffic-light yellow"></div>
                     <div class="traffic-light green"></div>
                 </div>
-                <span class="header-title" data-i18n="title">Universal Converter</span>
+                <span class="header-title" data-i18n="title">Smart Document Management</span>
             </div>
 
             <div class="header-right">
+                <button id="btn-workspace-toggle" onclick="toggleWorkspace()" class="btn btn-secondary btn-sm mr-2 flex items-center gap-1 font-medium">
+                    <span>✨</span> <span id="toggle-btn-text">AI Workspace</span>
+                </button>
+                <button id="btn-settings-toggle" onclick="openSettingsModal()" class="btn btn-secondary btn-icon mr-2" style="font-size: 14px;" title="API Settings">
+                    ⚙️
+                </button>
                 <!-- Language Selector -->
                 <div id="language-selector" class="lang-selector">
                     <!-- Populated by JS -->
@@ -95,10 +101,10 @@
             <div class="format-badges">
                 <span class="format-badge">JPG</span>
                 <span class="format-badge">PNG</span>
-                <span class="format-badge">MP4</span>
                 <span class="format-badge">PDF</span>
                 <span class="format-badge">DOCX</span>
                 <span class="format-badge">ZIP</span>
+                <span class="format-badge">XML</span>
             </div>
             <input type="file" id="file-input" class="hidden" multiple onchange="handleFiles(this.files)">
         </div>
@@ -163,12 +169,123 @@
 
         </div>
 
+        <!-- Smart Document Workspace Section -->
+        <section id="workspace-section" class="workspace-section hidden">
+            <div class="workspace-container glass">
+                
+                <!-- Workspace Sidebar -->
+                <div class="workspace-sidebar">
+                    <h3 class="sidebar-title">📁 Workspace Documents</h3>
+                    <div id="workspace-file-list" class="workspace-file-list">
+                        <div class="no-files-placeholder text-center text-xs text-muted py-6">
+                            No documents loaded.<br>Upload a file or click Open in Workspace.
+                        </div>
+                    </div>
+                    <div class="sidebar-upload-btn" onclick="document.getElementById('file-input').click()">
+                        <span>➕ Load Document</span>
+                    </div>
+                </div>
+                
+                <!-- Workspace Center (Editor) -->
+                <div class="workspace-center">
+                    <div class="editor-header">
+                        <div class="active-file-details">
+                            <span id="editor-file-icon" class="file-icon mr-2">📄</span>
+                            <span id="editor-file-name" class="font-semibold text-sm">no_file.txt</span>
+                            <span id="editor-file-badge" class="badge ml-2">TXT</span>
+                        </div>
+                        <div class="editor-header-actions">
+                            <button id="btn-manual-edit-toggle" class="btn btn-secondary btn-xs px-2 py-1 flex items-center gap-1" onclick="toggleManualEdit()">
+                                <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"/></svg>
+                                <span>Edit Manually</span>
+                            </button>
+                        </div>
+                    </div>
+                    
+                    <!-- Editor Main View -->
+                    <div class="editor-main">
+                        <!-- Line Number Gutter -->
+                        <div id="editor-gutter" class="editor-gutter">
+                            <div>1</div>
+                        </div>
+                        <!-- Text Area -->
+                        <textarea id="editor-textarea" class="editor-textarea" readonly onscroll="syncEditorScroll()" oninput="handleEditorInput()"></textarea>
+                    </div>
+                    
+                    <!-- AI Prompt Bar -->
+                    <div class="editor-footer">
+                        <div class="ai-input-wrapper">
+                            <span class="ai-sparkle-icon">✨</span>
+                            <input type="text" id="ai-prompt-input" placeholder="Give AI instructions... (e.g. 'go to line 6, delete Universal, insert Smart')" onkeydown="if(event.key === 'Enter') sendAIPrompt()">
+                            <button id="btn-send-ai" onclick="sendAIPrompt()" class="btn btn-primary btn-sm flex items-center gap-1">
+                                <span>Modify</span>
+                            </button>
+                        </div>
+                        <!-- Quick Actions / Suggestions -->
+                        <div class="ai-chips">
+                            <span class="chip-label text-[10px] text-muted">Quick Edits:</span>
+                            <button class="ai-chip" onclick="applyQuickPrompt('Fix spelling and grammar errors in this document')">Correct Grammar</button>
+                            <button class="ai-chip" onclick="applyQuickPrompt('Summarize the main points of this document')">Summarize</button>
+                            <button class="ai-chip" onclick="applyQuickPrompt('Translate this document to Spanish')">Translate to Spanish</button>
+                            <button class="ai-chip" onclick="applyQuickPrompt('Remove all empty lines from this document')">Clean Whitespace</button>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Workspace Right Panel -->
+                <div class="workspace-right">
+                    <div class="right-panel-section">
+                        <h4>🔍 OCR Text Extraction</h4>
+                        <p class="text-[11px] text-muted mb-3">Extract text from scanned PDF or image documents.</p>
+                        <button id="btn-run-ocr" class="btn btn-secondary w-full py-1.5 text-xs font-semibold flex items-center justify-center gap-1" disabled onclick="runOCRTextExtraction()">
+                            📸 Extract OCR Text
+                        </button>
+                    </div>
+                    
+                    <div class="right-panel-section">
+                        <h4>📊 Document Stats</h4>
+                        <div class="doc-stats text-xs">
+                            <div class="flex justify-between py-1.5 border-b border-white/5">
+                                <span class="text-muted">Lines:</span>
+                                <span id="stat-lines" class="font-medium">0</span>
+                            </div>
+                            <div class="flex justify-between py-1.5 border-b border-white/5">
+                                <span class="text-muted">Words:</span>
+                                <span id="stat-words" class="font-medium">0</span>
+                            </div>
+                            <div class="flex justify-between py-1.5">
+                                <span class="text-muted">Characters:</span>
+                                <span id="stat-chars" class="font-medium">0</span>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="right-panel-section mt-auto" style="margin-top: auto; border-top: 1px solid var(--border-color); padding-top: 12px;">
+                        <h4>💾 Export Document</h4>
+                        <div class="export-actions flex flex-col gap-2">
+                            <select id="export-format-select" class="custom-select w-full" style="padding-top: 6px; padding-bottom: 6px;">
+                                <option value="txt">TXT Document</option>
+                                <option value="docx">Word (DOCX)</option>
+                                <option value="pdf">PDF Document</option>
+                                <option value="xml">XML Document</option>
+                            </select>
+                            <button id="btn-export-doc" onclick="exportDocument()" class="btn btn-success w-full py-1.5 text-xs font-semibold flex items-center justify-center gap-1">
+                                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>
+                                <span>Save & Export</span>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+                
+            </div>
+        </section>
+
         <!-- Features -->
         <section id="features-section" class="features">
             <div class="feature-card">
                 <div class="feature-icon">📂</div>
-                <h3 data-i18n="features.formats.title">65+ Formats</h3>
-                <p data-i18n="features.formats.desc">Image, Video, Audio, Doc, Archive.</p>
+                <h3 data-i18n="features.formats.title">Documents & Images</h3>
+                <p data-i18n="features.formats.desc">Image, PDF, Word, PowerPoint, XML, Data.</p>
             </div>
             <div class="feature-card">
                 <div class="feature-icon">⚡</div>
@@ -189,6 +306,29 @@
 
     </main>
 
+    <!-- Settings Modal -->
+    <div id="settings-modal" class="settings-modal hidden">
+        <div class="settings-modal-overlay" onclick="closeSettingsModal()"></div>
+        <div class="settings-modal-content glass fade-in">
+            <div class="settings-modal-header">
+                <h3>⚙️ API Settings</h3>
+                <button onclick="closeSettingsModal()" class="close-modal-btn">&times;</button>
+            </div>
+            <div class="settings-modal-body">
+                <div class="form-group mb-4">
+                    <label class="block text-[10px] font-bold uppercase text-muted mb-2 tracking-wider">Groq API Key</label>
+                    <input type="password" id="gemini-key-input" class="settings-input w-full" placeholder="Enter your key (gsk_...)">
+                    <p class="text-[11px] text-muted mt-2 leading-relaxed">
+                        Get a key from <a href="https://console.groq.com/" target="_blank" class="text-blue-400 hover:underline">Groq Console</a>. The key is saved locally in your browser and used only to perform AI edits on your document.
+                    </p>
+                </div>
+            </div>
+            <div class="settings-modal-footer">
+                <button onclick="saveSettings()" class="btn btn-primary btn-sm w-full py-1.5 font-semibold">Save and Close</button>
+            </div>
+        </div>
+    </div>
+
     <!-- Toast -->
     <div id="toast" class="toast">
         <svg class="toast-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -198,7 +338,7 @@
     </div>
 
     <!-- Scripts -->
-    <script src="/static/script.js"></script>
+    <script src="/static/script.js?v=1.0.3"></script>
 </body>
 
 </html>

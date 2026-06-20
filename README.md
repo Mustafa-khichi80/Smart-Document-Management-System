@@ -1,19 +1,19 @@
 <div align="center">
 
-# Universal Converter V3
+# Smart Document Management
 
-<img src="screenshot/s1.png" alt="Universal Converter Dark Mode" width="700"/>
+<img src="screenshot/s1.png" alt="Smart Document Management Dark Mode" width="700"/>
 
-### Secure, Fast, and Modern File Converter
+### Secure, Fast, and Modern Document Management & Conversion
 
-[![Version](https://img.shields.io/badge/Version-3.0.0-blue.svg)](https://github.com/YusufEren97/universal-file-converter)
+[![Version](https://img.shields.io/badge/Version-1.0.0-blue.svg)](https://github.com/YusufEren97/universal-file-converter)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 [![Python](https://img.shields.io/badge/Python-3.12+-yellow.svg)](https://www.python.org/)
 [![FastAPI](https://img.shields.io/badge/FastAPI-Latest-teal.svg)](https://fastapi.tiangolo.com/)
 
 **Your files never leave your device. 100% local, 100% private.**
 
-[English](#-features) • [Türkçe](#-özellikler-tr) • [Deutsch](#-funktionen-de) • [中文](#-功能-zh)
+[English](#-features) • [Türkçe](#-özellikler-tr)
 
 </div>
 
@@ -26,9 +26,10 @@
 <td width="50%">
 
 ### Core Features
-- **65+ Format Support** - Image, Video, Audio, Document, Archive
-- **100% Local Processing** - No cloud, no upload, complete privacy
-- **GPU Accelerated** - Lightning fast conversion with FFmpeg
+- **Format Conversions** - Image, PDF, Word, PowerPoint, XML, CSV, XLSX, JSON, HTML, TXT
+- **100% Local Processing** - Complete privacy
+- **OCR Text Extraction** - Extract text from scanned PDFs and images
+- **AI-Driven Editing** - CRUD operations on text via Gemini AI
 - **Modern UI** - Apple-inspired design with Light/Dark mode
 - **Batch Processing** - Convert multiple files at once
 - **Drag & Drop** - Simply drop files to convert
@@ -39,8 +40,6 @@
 ### Multi-Language
 - 🇬🇧 English
 - 🇹🇷 Türkçe  
-- 🇩🇪 Deutsch
-- 🇨🇳 中文
 
 ### Theme Support
 Light & Dark mode with automatic theme detection
@@ -49,19 +48,13 @@ Light & Dark mode with automatic theme detection
 </tr>
 </table>
 
-<div align="center">
-<img src="screenshot/s2.png" alt="Universal Converter Light Mode" width="700"/>
-</div>
-
 ---
 
 ## Supported Formats
 
 | Category | Input Formats | Output Formats |
 |----------|---------------|----------------|
-| **Image** | JPG, PNG, WEBP, HEIC, SVG, ICO, TIFF, BMP, GIF, AVIF | JPG, PNG, WEBP, GIF, BMP, TIFF, ICO, PDF |
-| **Video** | MP4, MKV, AVI, MOV, WEBM, WMV, FLV, M4V, 3GP | MP4, MKV, AVI, MOV, WEBM, GIF, MP3, WAV |
-| **Audio** | MP3, WAV, FLAC, M4A, OGG, AAC, AIFF, OPUS | MP3, WAV, AAC, OGG, FLAC, M4A |
+| **Image** | JPG, PNG, WEBP, HEIC, SVG, ICO, TIFF, BMP, GIF, AVIF | JPG, PNG, WEBP, GIF, BMP, TIFF, ICO, PDF, TXT/DOCX/PDF (OCR) |
 | **Document** | PDF, DOCX, PPTX | PDF, DOCX, TXT, HTML, MD, PNG, JPG |
 | **Data** | CSV, XLSX, JSON, XML, HTML, TXT | CSV, XLSX, JSON, XML, HTML, TXT |
 | **Archive** | ZIP, 7Z, TAR, GZ, TGZ, TAR.GZ, TAR.BZ2 | ZIP, 7Z, TAR |
@@ -72,17 +65,11 @@ Light & Dark mode with automatic theme detection
 
 ### Prerequisites
 - **Python 3.12+** - [Download](https://www.python.org/downloads/)
-- **FFmpeg** (for Video/Audio) - [Download](https://ffmpeg.org/download.html)
-
-> **Note:** `pdf2docx` is incompatible with `numpy>=2.0`. It's pinned to `numpy<2.0` in requirements.txt.
+- **Tesseract OCR** (for image OCR) - Install and ensure it's in default program files path or set command path.
 
 ### Installation
 
 ```bash
-# Clone the repository
-git clone https://github.com/YusufEren97/universal-file-converter.git
-cd universal-file-converter
-
 # Install dependencies
 pip install -r requirements.txt
 
@@ -103,7 +90,8 @@ Open your browser: **http://localhost:1453**
 |-----------|------------|
 | **Backend** | Python, FastAPI, Uvicorn |
 | **Frontend** | HTML5, CSS3, JavaScript, Tailwind CSS |
-| **Conversion** | FFmpeg, Pillow, PyMuPDF, pdf2docx |
+| **Conversion** | Pillow, PyMuPDF, pdf2docx, python-pptx |
+| **OCR & AI** | pytesseract, google-generativeai |
 | **Archive** | zipfile, py7zr, tarfile |
 
 ---
@@ -111,18 +99,19 @@ Open your browser: **http://localhost:1453**
 ## Project Structure
 
 ```
-universal-converter/
+smart-document-management/
 ├── app/
 │   ├── main.py              # FastAPI application
 │   ├── utils.py             # Utility functions
 │   └── converters/          # Format converters
 │       ├── images.py        # Image conversion
-│       ├── video.py         # Video/Audio conversion
 │       ├── pdf.py           # PDF conversion
 │       ├── docx_converter.py # DOCX conversion
 │       ├── pptx_converter.py # PPTX conversion
 │       ├── docs.py          # Data file conversion
-│       └── archive.py       # Archive conversion
+│       ├── archive.py       # Archive conversion
+│       ├── ocr.py           # OCR text extraction
+│       └── ai.py            # AI editing
 ├── static/
 │   ├── index.html           # Main UI
 │   ├── style.css            # Styles
@@ -135,29 +124,6 @@ universal-converter/
 
 ---
 
-## Configuration
-
-| Variable | Default | Description |
-|----------|---------|-------------|
-| Port | `1453` | Server port |
-| Max File Size | `100MB` | Maximum upload size |
-| Cleanup Interval | `10 min` | Auto-delete temp files |
-
----
-
 ## License
 
 This project is licensed under the **MIT License** - see the [LICENSE](LICENSE) file for details.
-
----
-
-<div align="center">
-
-## Author
-
-| <img src="https://github.com/YusufEren97.png" width="120" style="border-radius:50%"/> |
-|:---:|
-| **Yusuf Eren Seyrek** |
-| [![GitHub](https://img.shields.io/badge/GitHub-YusufEren97-black?logo=github)](https://github.com/YusufEren97) |
-
-</div>

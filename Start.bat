@@ -1,20 +1,20 @@
 @echo off
 chcp 65001 >nul 2>&1
-title Universal Converter v3.0
+title Smart Document Management v1.0
 color 0B
 cd /d "%~dp0"
 
 :MENU
 cls
 echo.
-echo   ██████╗ ██████╗ ███╗   ██╗██╗   ██╗███████╗██████╗ ████████╗███████╗██████╗
-echo  ██╔════╝██╔═══██╗████╗  ██║██║   ██║██╔════╝██╔══██╗╚══██╔══╝██╔════╝██╔══██╗
-echo  ██║     ██║   ██║██╔██╗ ██║██║   ██║█████╗  ██████╔╝   ██║   █████╗  ██████╔╝
-echo  ██║     ██║   ██║██║╚██╗██║╚██╗ ██╔╝██╔══╝  ██╔══██╗   ██║   ██╔══╝  ██╔══██╗
-echo  ╚██████╗╚██████╔╝██║ ╚████║ ╚████╔╝ ███████╗██║  ██║   ██║   ███████╗██║  ██║
-echo   ╚═════╝ ╚═════╝ ╚═╝  ╚═══╝  ╚═══╝  ╚══════╝╚═╝  ╚═╝   ╚═╝   ╚══════╝╚═╝  ╚═╝
+echo   ██████╗███╗   ███╗ █████╗ ██████╗ ████████╗    ██████╗  ██████╗  ██████╗███████╗
+echo  ██╔════╝████╗ ████║██╔══██╗██╔══██╗╚══██╔══╝    ██╔══██╗██╔═══██╗██╔════╝██╔════╝
+echo  ███████╗██╔████╔██║███████║██████╔╝   ██║       ██║  ██║██║   ██║██║     ███████╗
+echo  ╚════██║██║╚██╔╝██║██╔══██║██╔══██╗   ██║       ██║  ██║██║   ██║██║     ╚════██║
+echo  ███████║██║ ╚═╝ ██║██║  ██║██║  ██║   ██║       ██████╔╝╚██████╔╝╚██████╗███████║
+echo  ╚══════╝╚═╝     ╚═╝╚═╝  ╚═╝╚═╝  ╚═╝   ╚═╝       ╚═════╝  ╚═════╝  ╚═════╝╚══════╝
 echo.
-echo   Universal File Converter v3.0
+echo   Smart Document Management v1.0
 echo   ═══════════════════════════════════════
 echo.
 echo   [1] Start Server
@@ -39,7 +39,21 @@ echo.
 echo   [*] Installing dependencies...
 echo   [*] Make sure you have internet connection.
 echo.
-py -3.12 -m pip install -r requirements.txt
+
+set PYTHON_CMD=python
+python --version >nul 2>&1
+if %errorlevel% neq 0 (
+    py --version >nul 2>&1
+    if %errorlevel% equ 0 (
+        set PYTHON_CMD=py
+    ) else (
+        echo   [ERROR] Python was not found in your system PATH!
+        pause
+        goto MENU
+    )
+)
+
+%PYTHON_CMD% -m pip install -r requirements.txt
 if %errorlevel% equ 0 (
     echo OK > .installed
     echo.
@@ -55,24 +69,29 @@ goto MENU
 :START
 cls
 echo.
-echo   [*] Starting Universal Converter...
+echo   [*] Starting Smart Document Management...
 echo.
 
-:: Python 3.12 Check
-echo   [CHECK] Checking Python 3.12...
-py -3.12 --version >nul 2>&1
+:: Detect python command
+set PYTHON_CMD=python
+python --version >nul 2>&1
 if %errorlevel% neq 0 (
-    echo   [ERROR] Python 3.12 not found!
-    echo   Download Python 3.12 from python.org
-    pause
-    goto MENU
+    py --version >nul 2>&1
+    if %errorlevel% equ 0 (
+        set PYTHON_CMD=py
+    ) else (
+        echo   [ERROR] Python was not found in your system PATH!
+        echo   Please install Python (3.10+) and ensure it's added to PATH.
+        pause
+        goto MENU
+    )
 )
-echo   [OK] Python 3.12 found
+echo   [OK] Python command detected: %PYTHON_CMD%
 
 :: Check requirements
 if not exist ".installed" (
     echo   [INFO] Installing dependencies...
-    py -3.12 -m pip install -r requirements.txt
+    %PYTHON_CMD% -m pip install -r requirements.txt
     if %errorlevel% equ 0 (
         echo OK > .installed
         echo   [OK] Dependencies installed
@@ -91,7 +110,7 @@ echo   Press Ctrl+C to stop
 echo   ═══════════════════════════════════════
 echo.
 
-py -3.12 -m uvicorn app.main:app --port 1453
+%PYTHON_CMD% -m uvicorn app.main:app --port 1453
 
 if %errorlevel% neq 0 (
     echo.
