@@ -254,7 +254,7 @@ async def api_convert(request: ConvertRequest):
                         apply_html_watermark(path)
                         
     except Exception as e:
-        result = {"success": False, "error": f"Dönüşüm hatası: {str(e)}"}
+        result = {"success": False, "error": f"Conversion error: {str(e)}"}
     
     return result
 

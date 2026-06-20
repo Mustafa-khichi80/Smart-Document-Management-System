@@ -743,9 +743,9 @@ let manualEditMode = false;
 // 1. Settings Modal Controls
 function openSettingsModal() {
     const modal = document.getElementById('settings-modal');
-    const input = document.getElementById('gemini-key-input');
+    const input = document.getElementById('groq-key-input');
     if (modal && input) {
-        input.value = localStorage.getItem('gemini_api_key') || '';
+        input.value = localStorage.getItem('groq_api_key') || localStorage.getItem('gemini_api_key') || '';
         modal.classList.remove('hidden');
     }
 }
@@ -756,10 +756,10 @@ function closeSettingsModal() {
 }
 
 function saveSettings() {
-    const input = document.getElementById('gemini-key-input');
+    const input = document.getElementById('groq-key-input');
     if (input) {
         const key = input.value.trim();
-        localStorage.setItem('gemini_api_key', key);
+        localStorage.setItem('groq_api_key', key);
         showToast('Settings saved successfully!');
         closeSettingsModal();
     }
@@ -1027,7 +1027,7 @@ async function sendAIPrompt() {
     if (promptValue === '') return;
     
     const textValue = textarea.value;
-    const apiKey = localStorage.getItem('gemini_api_key') || '';
+    const apiKey = localStorage.getItem('groq_api_key') || localStorage.getItem('gemini_api_key') || '';
     
     // Get active file name
     const activeFile = fileDataStore.get(activeWorkspaceFileId);

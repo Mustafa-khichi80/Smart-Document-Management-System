@@ -52,10 +52,8 @@ def _pdf_to_docx(input_path: str, output_path: str, output_filename: str) -> dic
             return {"success": True, "output_path": output_path, "filename": output_filename}
         return {"success": False, "error": "DOCX file was not created"}
         
-    except ImportError:
-        return {"success": False, "error": "pdf2docx not installed. Run 'pip install pdf2docx'"}
-    except Exception as e:
-        # Fallback to basic text extraction if pdf2docx fails
+    except (ImportError, Exception) as e:
+        # Fallback to basic text extraction if pdf2docx is not installed or fails
         return _pdf_to_docx_fallback(input_path, output_path, output_filename, str(e))
 
 
@@ -100,7 +98,86 @@ def _extract_pdf_text_with_ocr_fallback(input_path: str) -> str:
 
 
 def _pdf_to_docx_fallback(input_path: str, output_path: str, output_filename: str, original_error: str) -> dict:
-    """Fallback: Basic PDF to DOCX conversion using PyPDF2 + python-docx with OCR fallback."""
+    """Fallback: High-fidelity PDF to DOCX conversion using PyMuPDF (fitz) + python-docx to preserve styling."""
+    try:
+        from docx import Document
+        from docx.shared import Pt, RGBColor
+        import fitz  # PyMuPDF is installed on Vercel
+        
+        doc = Document()
+        pdf_doc = fitz.open(input_path)
+        
+        for page in pdf_doc:
+            # Extract detailed layout block structure
+            text_blocks = page.get_text("dict")["blocks"]
+            for block in text_blocks:
+                if block.get("type") == 0:  # Text block
+                    p = doc.add_paragraph()
+                    
+                    # Group spans within lines
+                    for line in block.get("lines", []):
+                        for span in line.get("spans", []):
+                            text = span.get("text", "")
+                            if not text:
+                                continue
+                                
+                            run = p.add_run(text)
+                            
+                            # Parse font formatting
+                            font_name = span.get("font", "").lower()
+                            flags = span.get("flags", 0)
+                            # Flags: bit 4 is Bold, bit 1 is Italic
+                            is_bold = bool(flags & 16) or "bold" in font_name or "bd" in font_name
+                            is_italic = bool(flags & 2) or "italic" in font_name or "it" in font_name or "oblique" in font_name
+                            
+                            if is_bold:
+                                run.bold = True
+                            if is_italic:
+                                run.italic = True
+                                
+                            # Set size
+                            size = span.get("size", 10)
+                            run.font.size = Pt(size)
+                            
+                            # Set color
+                            color_int = span.get("color", 0)
+                            # PyMuPDF color is an sRGB integer.
+                            r = (color_int >> 16) & 255
+                            g = (color_int >> 8) & 255
+                            b = color_int & 255
+                            run.font.color.rgb = RGBColor(r, g, b)
+                            
+                            # Standardize Font Name
+                            if "times" in font_name:
+                                run.font.name = "Times New Roman"
+                            elif "arial" in font_name:
+                                run.font.name = "Arial"
+                            elif "courier" in font_name:
+                                run.font.name = "Courier New"
+                            elif "calibri" in font_name:
+                                run.font.name = "Calibri"
+                            else:
+                                run.font.name = "Arial"
+                                
+                        p.add_run(" ")  # Add spacing between lines of same block
+        
+        pdf_doc.close()
+        doc.save(output_path)
+        
+        return {
+            "success": True, 
+            "output_path": output_path, 
+            "filename": output_filename,
+            "note": "Converted using PyMuPDF high-fidelity layout fallback"
+        }
+    except Exception as e:
+        print(f"[PDF→DOCX Fallback] High-fidelity method failed: {e}")
+        # Call basic PyPDF2 fallback if PyMuPDF method fails
+        return _pdf_to_docx_basic_fallback(input_path, output_path, output_filename, original_error)
+
+
+def _pdf_to_docx_basic_fallback(input_path: str, output_path: str, output_filename: str, original_error: str) -> dict:
+    """Basic Fallback: PDF to DOCX conversion using PyPDF2 + python-docx (runs if high-fidelity method fails)."""
     try:
         from docx import Document
         
@@ -214,7 +291,7 @@ def _pdf_to_images(input_path: str, output_dir: str, target_format: str, name: s
     try:
         import fitz  # PyMuPDF
     except ImportError:
-        return {"success": False, "error": "PyMuPDF yüklü değil. 'pip install PyMuPDF' çalıştırın."}
+        return {"success": False, "error": "PyMuPDF not installed. Run 'pip install PyMuPDF'"}
     
     try:
         pdf_doc = fitz.open(input_path)
@@ -244,10 +321,10 @@ def _pdf_to_images(input_path: str, output_dir: str, target_format: str, name: s
                 "output_path": os.path.join(output_dir, output_files[0]), 
                 "filename": output_files[0],
                 "all_files": output_files,
-                "note": f"{len(output_files)} sayfa resmi oluşturuldu"
+                "note": f"Created {len(output_files)} page images"
             }
         
-        return {"success": False, "error": "Sayfa dönüştürülemedi"}
+        return {"success": False, "error": "Could not convert page"}
         
     except Exception as e:
-        return {"success": False, "error": f"PDF→resim dönüşüm hatası: {str(e)}"}
+        return {"success": False, "error": f"PDF to image conversion error: {str(e)}"}

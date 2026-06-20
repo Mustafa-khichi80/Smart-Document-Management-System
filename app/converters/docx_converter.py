@@ -84,6 +84,147 @@ def _docx_to_pdf(input_path: str, output_path: str, output_filename: str) -> dic
     except Exception as e:
         print(f"[DOCX→PDF] LibreOffice failed: {e}")
     
+    # Method 3: Python-only fallback (ReportLab) - used when Word/LibreOffice are missing
+    try:
+        from docx import Document
+        from reportlab.lib.pagesizes import letter
+        from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer
+        from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+        
+        doc = Document(input_path)
+        pdf = SimpleDocTemplate(output_path, pagesize=letter,
+                                rightMargin=40, leftMargin=40,
+                                topMargin=40, bottomMargin=40)
+        styles = getSampleStyleSheet()
+        body_style = ParagraphStyle(
+            'CustomBody',
+            parent=styles['BodyText'],
+            fontName='Helvetica',
+            fontSize=10,
+            leading=14
+        )
+        
+        story = []
+        for idx, p in enumerate(doc.paragraphs):
+            # Parse runs and build styled HTML
+            p_html = ""
+            for run in p.runs:
+                text = run.text.replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;')
+                if not text:
+                    continue
+                
+                tags_start = ""
+                tags_end = ""
+                
+                font_attrs = []
+                if run.font.size:
+                    font_attrs.append(f'size="{run.font.size.pt}"')
+                if run.font.color and run.font.color.rgb:
+                    hex_color = f"#{run.font.color.rgb}"
+                    font_attrs.append(f'color="{hex_color}"')
+                if run.font.name:
+                    font_name = run.font.name.lower()
+                    if "times" in font_name:
+                        font_attrs.append('name="Times-Roman"')
+                    elif "courier" in font_name:
+                        font_attrs.append('name="Courier"')
+                    else:
+                        font_attrs.append('name="Helvetica"')
+                
+                if font_attrs:
+                    tags_start += f'<font {" ".join(font_attrs)}>'
+                    tags_end = '</font>' + tags_end
+                    
+                if run.bold:
+                    tags_start += '<b>'
+                    tags_end = '</b>' + tags_end
+                if run.italic:
+                    tags_start += '<i>'
+                    tags_end = '</i>' + tags_end
+                if run.underline:
+                    tags_start += '<u>'
+                    tags_end = '</u>' + tags_end
+                    
+                p_html += f"{tags_start}{text}{tags_end}"
+            
+            if p_html.strip():
+                align_val = 0
+                if p.alignment == 1:
+                    align_val = 1
+                elif p.alignment == 2:
+                    align_val = 2
+                elif p.alignment == 3:
+                    align_val = 4
+                
+                p_style = ParagraphStyle(
+                    f'PStyle_{idx}',
+                    parent=body_style,
+                    alignment=align_val
+                )
+                story.append(Paragraph(p_html, p_style))
+            elif not p.text.strip():
+                story.append(Spacer(1, 10))
+                
+        # Also extract table text and append to PDF
+        for t_idx, t in enumerate(doc.tables):
+            story.append(Spacer(1, 15))
+            for r_idx, r in enumerate(t.rows):
+                for c_idx, cell in enumerate(r.cells):
+                    for p_idx, p in enumerate(cell.paragraphs):
+                        p_html = ""
+                        for run in p.runs:
+                            text = run.text.replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;')
+                            if not text:
+                                continue
+                            tags_start = ""
+                            tags_end = ""
+                            font_attrs = []
+                            if run.font.size:
+                                font_attrs.append(f'size="{run.font.size.pt}"')
+                            if run.font.color and run.font.color.rgb:
+                                hex_color = f"#{run.font.color.rgb}"
+                                font_attrs.append(f'color="{hex_color}"')
+                            if run.font.name:
+                                font_name = run.font.name.lower()
+                                if "times" in font_name:
+                                    font_attrs.append('name="Times-Roman"')
+                                elif "courier" in font_name:
+                                    font_attrs.append('name="Courier"')
+                                else:
+                                    font_attrs.append('name="Helvetica"')
+                            if font_attrs:
+                                tags_start += f'<font {" ".join(font_attrs)}>'
+                                tags_end = '</font>' + tags_end
+                            if run.bold:
+                                tags_start += '<b>'
+                                tags_end = '</b>' + tags_end
+                            if run.italic:
+                                tags_start += '<i>'
+                                tags_end = '</i>' + tags_end
+                            if run.underline:
+                                tags_start += '<u>'
+                                tags_end = '</u>' + tags_end
+                            p_html += f"{tags_start}{text}{tags_end}"
+                        
+                        if p_html.strip():
+                            p_style = ParagraphStyle(
+                                f'TStyle_{t_idx}_{r_idx}_{c_idx}_{p_idx}',
+                                parent=body_style
+                            )
+                            label = f"[{r_idx+1},{c_idx+1}] " if p_idx == 0 else ""
+                            story.append(Paragraph(f"{label}{p_html}", p_style))
+                
+        pdf.build(story)
+        if os.path.exists(output_path):
+            return {
+                "success": True, 
+                "output_path": output_path, 
+                "filename": output_filename,
+                "note": "Converted using ReportLab fallback (Word/LibreOffice missing)"
+            }
+    except Exception as fallback_err:
+        print(f"[DOCX→PDF] Fallback failed: {fallback_err}")
+    
     return {
         "success": False, 
         "error": "PDF conversion requires Microsoft Word or LibreOffice. Please install one of them."

@@ -120,14 +120,14 @@ def _process_image(input_path: str, output_dir: str, target_format: str, quality
                 
             elif target_format in ['heic', 'heif']:
                 if not HAS_HEIF:
-                    return {"success": False, "error": "pillow-heif yüklü değil. 'pip install pillow-heif' çalıştırın."}
+                    return {"success": False, "error": "pillow-heif not installed. Run 'pip install pillow-heif'"}
                 if img.mode != 'RGB':
                     img = img.convert('RGB')
                 img.save(output_path, 'HEIF', quality=quality_value)
                 
             elif target_format == 'avif':
                 if not HAS_AVIF:
-                    return {"success": False, "error": "AVIF desteği için Pillow 9.1+ ve libavif gerekli."}
+                    return {"success": False, "error": "AVIF support requires Pillow 9.1+ and libavif."}
                 save_kwargs = {'quality': quality_value}
                 img.save(output_path, 'AVIF', **save_kwargs)
                 
@@ -138,17 +138,14 @@ def _process_image(input_path: str, output_dir: str, target_format: str, quality
         return {"success": True, "output_path": output_path, "filename": output_filename}
 
     except Exception as e:
-        return {"success": False, "error": f"Resim dönüşüm hatası: {str(e)}"}
+        return {"success": False, "error": f"Image conversion error: {str(e)}"}
 
 
 def _convert_svg(input_path: str, output_path: str, output_filename: str, target_format: str) -> dict:
     """Convert SVG to raster formats using cairosvg."""
     try:
         import cairosvg
-    except ImportError:
-        return {"success": False, "error": "cairosvg yüklü değil. 'pip install cairosvg' çalıştırın."}
-    
-    try:
+        
         if target_format == 'png':
             cairosvg.svg2png(url=input_path, write_to=output_path, scale=2.0)
         elif target_format == 'pdf':
@@ -161,9 +158,14 @@ def _convert_svg(input_path: str, output_path: str, output_filename: str, target
                 rgb_img = img.convert('RGB')
                 rgb_img.save(output_path, 'JPEG', quality=95)
         else:
-            return {"success": False, "error": f"SVG sadece PNG, PDF veya JPG'ye dönüştürülebilir."}
+            return {"success": False, "error": "SVG can only be converted to PNG, PDF, or JPG."}
             
         return {"success": True, "output_path": output_path, "filename": output_filename}
         
+    except (ImportError, OSError) as e:
+        return {
+            "success": False, 
+            "error": f"cairosvg or cairo library is not installed/missing in this environment: {str(e)}"
+        }
     except Exception as e:
-        return {"success": False, "error": f"SVG dönüşüm hatası: {str(e)}"}
+        return {"success": False, "error": f"SVG conversion error: {str(e)}"}

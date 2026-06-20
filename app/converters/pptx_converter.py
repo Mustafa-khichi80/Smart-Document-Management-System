@@ -36,7 +36,7 @@ def _process_pptx(input_path: str, output_dir: str, target_format: str) -> dict:
 
 
 def _pptx_to_pdf(input_path: str, output_path: str, output_filename: str) -> dict:
-    """Convert PPTX to PDF using LibreOffice or PowerPoint COM."""
+    """Convert PPTX to PDF using LibreOffice, PowerPoint COM, or ReportLab fallback."""
     
     # Method 1: Try LibreOffice (cross-platform)
     try:
@@ -91,9 +91,182 @@ def _pptx_to_pdf(input_path: str, output_path: str, output_filename: str) -> dic
     except Exception as e:
         print(f"[PPTX→PDF] PowerPoint COM failed: {e}")
     
+    # Method 3: Python-only fallback (ReportLab) - used when PowerPoint/LibreOffice are missing (e.g. on Vercel)
+    try:
+        from pptx import Presentation
+        from reportlab.lib.pagesizes import letter, landscape
+        from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, PageBreak
+        from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+        
+        prs = Presentation(input_path)
+        pdf = SimpleDocTemplate(output_path, pagesize=landscape(letter),
+                                rightMargin=40, leftMargin=40,
+                                topMargin=40, bottomMargin=40)
+        styles = getSampleStyleSheet()
+        title_style = ParagraphStyle(
+            'SlideTitle',
+            parent=styles['Heading2'],
+            fontName='Helvetica-Bold',
+            fontSize=18,
+            leading=22,
+            spaceAfter=15
+        )
+        body_style = ParagraphStyle(
+            'SlideBody',
+            parent=styles['Normal'],
+            fontName='Helvetica',
+            fontSize=12,
+            leading=16,
+            spaceAfter=10
+        )
+        
+        story = []
+        for idx, slide in enumerate(prs.slides):
+            if idx > 0:
+                story.append(PageBreak())
+                
+            story.append(Paragraph(f"Slide {idx+1}", title_style))
+            story.append(Spacer(1, 10))
+            
+            p_counter = 0
+            # Extract text from shapes with styling preservation
+            for shape in slide.shapes:
+                # 1. Text Frame Shapes
+                if hasattr(shape, "text_frame") and shape.text_frame:
+                    for paragraph in shape.text_frame.paragraphs:
+                        p_html = ""
+                        for run in paragraph.runs:
+                            text = run.text.replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;')
+                            if not text:
+                                continue
+                            
+                            tags_start = ""
+                            tags_end = ""
+                            
+                            font_attrs = []
+                            if run.font.size:
+                                font_attrs.append(f'size="{run.font.size.pt}"')
+                            if run.font.color and run.font.color.type == 1:
+                                hex_color = f"#{run.font.color.rgb}"
+                                font_attrs.append(f'color="{hex_color}"')
+                            if run.font.name:
+                                font_name = run.font.name.lower()
+                                if "times" in font_name:
+                                    font_attrs.append('name="Times-Roman"')
+                                elif "courier" in font_name:
+                                    font_attrs.append('name="Courier"')
+                                else:
+                                    font_attrs.append('name="Helvetica"')
+                                    
+                            if font_attrs:
+                                tags_start += f'<font {" ".join(font_attrs)}>'
+                                tags_end = '</font>' + tags_end
+                                
+                            if run.font.bold:
+                                tags_start += '<b>'
+                                tags_end = '</b>' + tags_end
+                            if run.font.italic:
+                                tags_start += '<i>'
+                                tags_end = '</i>' + tags_end
+                            if run.font.underline:
+                                tags_start += '<u>'
+                                tags_end = '</u>' + tags_end
+                                
+                            p_html += f"{tags_start}{text}{tags_end}"
+                        
+                        if p_html.strip():
+                            align_val = 0
+                            if paragraph.alignment == 2:
+                                align_val = 1
+                            elif paragraph.alignment == 3:
+                                align_val = 2
+                            elif paragraph.alignment == 4:
+                                align_val = 4
+                                
+                            p_style = ParagraphStyle(
+                                f'SStyle_{idx}_{p_counter}',
+                                parent=body_style,
+                                alignment=align_val
+                            )
+                            story.append(Paragraph(p_html, p_style))
+                            p_counter += 1
+                
+                # 2. Table Shapes
+                elif hasattr(shape, "has_table") and shape.has_table:
+                    for r_idx, row in enumerate(shape.table.rows):
+                        for c_idx, cell in enumerate(row.cells):
+                            for p_idx, paragraph in enumerate(cell.text_frame.paragraphs):
+                                p_html = ""
+                                for run in paragraph.runs:
+                                    text = run.text.replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;')
+                                    if not text:
+                                        continue
+                                    
+                                    tags_start = ""
+                                    tags_end = ""
+                                    
+                                    font_attrs = []
+                                    if run.font.size:
+                                        font_attrs.append(f'size="{run.font.size.pt}"')
+                                    if run.font.color and run.font.color.type == 1:
+                                        hex_color = f"#{run.font.color.rgb}"
+                                        font_attrs.append(f'color="{hex_color}"')
+                                    if run.font.name:
+                                        font_name = run.font.name.lower()
+                                        if "times" in font_name:
+                                            font_attrs.append('name="Times-Roman"')
+                                        elif "courier" in font_name:
+                                            font_attrs.append('name="Courier"')
+                                        else:
+                                            font_attrs.append('name="Helvetica"')
+                                            
+                                    if font_attrs:
+                                        tags_start += f'<font {" ".join(font_attrs)}>'
+                                        tags_end = '</font>' + tags_end
+                                        
+                                    if run.font.bold:
+                                        tags_start += '<b>'
+                                        tags_end = '</b>' + tags_end
+                                    if run.font.italic:
+                                        tags_start += '<i>'
+                                        tags_end = '</i>' + tags_end
+                                    if run.font.underline:
+                                        tags_start += '<u>'
+                                        tags_end = '</u>' + tags_end
+                                        
+                                    p_html += f"{tags_start}{text}{tags_end}"
+                                
+                                if p_html.strip():
+                                    align_val = 0
+                                    if paragraph.alignment == 2:
+                                        align_val = 1
+                                    elif paragraph.alignment == 3:
+                                        align_val = 2
+                                    elif paragraph.alignment == 4:
+                                        align_val = 4
+                                        
+                                    p_style = ParagraphStyle(
+                                        f'TStyle_{idx}_{r_idx}_{c_idx}_{p_idx}',
+                                        parent=body_style,
+                                        alignment=align_val
+                                    )
+                                    label = f"[{r_idx+1},{c_idx+1}] " if p_idx == 0 else ""
+                                    story.append(Paragraph(f"{label}{p_html}", p_style))
+            
+        pdf.build(story)
+        if os.path.exists(output_path):
+            return {
+                "success": True, 
+                "output_path": output_path, 
+                "filename": output_filename,
+                "note": "Converted using ReportLab fallback (PowerPoint/LibreOffice missing)"
+            }
+    except Exception as fallback_err:
+        print(f"[PPTX→PDF] Fallback failed: {fallback_err}")
+    
     return {
         "success": False, 
-        "error": "PDF dönüşümü için LibreOffice veya PowerPoint gerekli. Lütfen birini yükleyin."
+        "error": "PDF conversion requires PowerPoint or LibreOffice. Please install one of them."
     }
 
 
@@ -125,11 +298,11 @@ def _pptx_to_images(input_path: str, output_dir: str, target_format: str, name: 
                     "success": True, 
                     "output_path": os.path.join(output_dir, images_extracted[0]), 
                     "filename": images_extracted[0],
-                    "note": f"Sunumdan {len(images_extracted)} resim çıkarıldı"
+                    "note": f"Extracted {len(images_extracted)} images from presentation"
                 }
-            return {"success": False, "error": "Sunumda resim bulunamadı ve PDF dönüşümü başarısız"}
+            return {"success": False, "error": "No images found in presentation and PDF conversion failed"}
         except Exception as e:
-            return {"success": False, "error": f"Resim çıkarma hatası: {str(e)}"}
+            return {"success": False, "error": f"Image extraction error: {str(e)}"}
     
     # Convert PDF to images using PyMuPDF (fitz) - NO POPPLER NEEDED!
     try:
@@ -166,18 +339,18 @@ def _pptx_to_images(input_path: str, output_dir: str, target_format: str, name: 
                 "output_path": os.path.join(output_dir, output_files[0]), 
                 "filename": output_files[0],
                 "all_files": output_files,
-                "note": f"{len(output_files)} slayt resmi oluşturuldu"
+                "note": f"Created {len(output_files)} slide images"
             }
         
-        return {"success": False, "error": "Sayfa dönüştürülemedi"}
+        return {"success": False, "error": "Could not convert slide"}
         
     except ImportError:
-        return {"success": False, "error": "PyMuPDF yüklü değil. 'pip install PyMuPDF' çalıştırın."}
+        return {"success": False, "error": "PyMuPDF not installed. Run 'pip install PyMuPDF'"}
     except Exception as e:
         # Clean up on error
         if os.path.exists(pdf_path):
             os.remove(pdf_path)
-        return {"success": False, "error": f"PDF→resim dönüşüm hatası: {str(e)}"}
+        return {"success": False, "error": f"PDF to image conversion error: {str(e)}"}
 
 
 def _pptx_to_txt(input_path: str, output_path: str, output_filename: str) -> dict:
@@ -185,13 +358,13 @@ def _pptx_to_txt(input_path: str, output_path: str, output_filename: str) -> dic
     try:
         from pptx import Presentation
     except ImportError:
-        return {"success": False, "error": "python-pptx yüklü değil. 'pip install python-pptx' çalıştırın."}
+        return {"success": False, "error": "python-pptx not installed. Run 'pip install python-pptx'"}
     
     prs = Presentation(input_path)
     text_content = []
     
     for slide_num, slide in enumerate(prs.slides, 1):
-        text_content.append(f"=== Slayt {slide_num} ===\n")
+        text_content.append(f"=== Slide {slide_num} ===\n")
         for shape in slide.shapes:
             if hasattr(shape, "text") and shape.text.strip():
                 text_content.append(shape.text)
