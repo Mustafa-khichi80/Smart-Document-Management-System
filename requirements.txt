@@ -13,21 +13,13 @@ PyPDF2
 python-docx
 lxml
 
-# === NUMPY UYARISI ===
-# pdf2docx numpy>=2.0 ile uyumsuz, bu yüzden sınırlıyoruz
-numpy
-
 # === Gelişmiş Belge Dönüştürme ===
-pdf2docx
-docx2pdf
 python-pptx
 PyMuPDF
 reportlab
 
 # === Ek Özellikler ===
-py7zr
 pillow-heif
-cairosvg
 
 # === Windows Özel (PPTX/DOCX → PDF) ===
 comtypes; platform_system == "Windows"
