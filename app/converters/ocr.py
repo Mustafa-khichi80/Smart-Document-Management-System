@@ -20,7 +20,7 @@ if sys.platform.startswith("win"):
     pytesseract.pytesseract.tesseract_cmd = r'C:\Program Files\Tesseract-OCR\tesseract.exe'
 
 def _ocr_with_groq_vision(input_path: str, extract_style: bool = False) -> str:
-    """Perform OCR using Groq Vision API (llama-3.2-11b-vision-preview)."""
+    """Perform OCR using Groq Vision API, trying available models in order."""
     import base64
     import requests
     
@@ -50,37 +50,48 @@ def _ocr_with_groq_vision(input_path: str, extract_style: bool = False) -> str:
     else:
         prompt_text = "Extract all text from this image. Output ONLY the extracted text verbatim. Do not include any explanations, headings, markdown code blocks, or additional commentary. Preserve the original layout structure as much as possible."
         
-    payload = {
-        "messages": [
-            {
-                "role": "user",
-                "content": [
-                    {
-                        "type": "text", 
-                        "text": prompt_text
-                    },
-                    {
-                        "type": "image_url",
-                        "image_url": {
-                            "url": f"data:{mime_type};base64,{base64_image}"
-                        }
-                    }
-                ]
-            }
-        ],
-        "model": "llama-3.2-11b-vision-preview",
-        "temperature": 0.1
-    }
+    models = ["meta-llama/llama-4-scout-17b-16e-instruct", "qwen/qwen3.6-27b"]
     
-    response = requests.post(
-        "https://api.groq.com/openai/v1/chat/completions",
-        json=payload,
-        headers=headers,
-        timeout=60
-    )
-    response.raise_for_status()
-    res_json = response.json()
-    return res_json["choices"][0]["message"]["content"]
+    last_error = None
+    for model in models:
+        payload = {
+            "messages": [
+                {
+                    "role": "user",
+                    "content": [
+                        {
+                            "type": "text", 
+                            "text": prompt_text
+                        },
+                        {
+                            "type": "image_url",
+                            "image_url": {
+                                "url": f"data:{mime_type};base64,{base64_image}"
+                            }
+                        }
+                    ]
+                }
+            ],
+            "model": model,
+            "temperature": 0.1
+        }
+        
+        try:
+            response = requests.post(
+                "https://api.groq.com/openai/v1/chat/completions",
+                json=payload,
+                headers=headers,
+                timeout=60
+            )
+            response.raise_for_status()
+            res_json = response.json()
+            return res_json["choices"][0]["message"]["content"]
+        except Exception as e:
+            print(f"Groq Vision OCR failed with model {model}: {e}")
+            last_error = e
+            
+    raise last_error or Exception("No Groq Vision model succeeded.")
+
 
 def html_to_docx(html_content: str, output_path: str):
     """
