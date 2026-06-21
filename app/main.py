@@ -315,7 +315,6 @@ async def api_ocr_extract(request: OCRExtractRequest):
 async def api_ai_edit(request: AIEditRequest):
     result = await edit_document_with_ai(request.text, request.prompt, request.api_key)
     return result
-
 @app.post("/api/document/text")
 async def api_document_text(request: OCRExtractRequest):
     file_path = os.path.join(UPLOAD_DIR, os.path.basename(request.file_path))
@@ -342,15 +341,51 @@ async def api_document_text(request: OCRExtractRequest):
             text = "\n".join(text_lines)
             
         elif ext == '.pdf':
-            from .converters.pdf import _extract_pdf_text_with_ocr_fallback
-            text = _extract_pdf_text_with_ocr_fallback(file_path)
+            temp_docx_path = file_path + ".docx"
+            if not os.path.exists(temp_docx_path):
+                from .converters.pdf import _pdf_to_docx
+                _pdf_to_docx(file_path, temp_docx_path, os.path.basename(temp_docx_path))
+                
+            if os.path.exists(temp_docx_path):
+                from docx import Document
+                doc = Document(temp_docx_path)
+                text_lines = []
+                for p in doc.paragraphs:
+                    text_lines.append(p.text)
+                for t in doc.tables:
+                    for r in t.rows:
+                        text_lines.append("\t".join([cell.text for cell in r.cells]))
+                text = "\n".join(text_lines)
+            else:
+                from .converters.pdf import _extract_pdf_text_with_ocr_fallback
+                text = _extract_pdf_text_with_ocr_fallback(file_path)
             
         elif ext in ['.png', '.jpg', '.jpeg', '.webp', '.bmp', '.tiff', '.tif']:
-            res = await extract_ocr_text(file_path)
-            if res.get("success"):
-                text = res.get("text")
+            temp_docx_path = file_path + ".docx"
+            if not os.path.exists(temp_docx_path):
+                from .converters.ocr import _ocr_with_groq_vision, html_to_docx
+                try:
+                    html_text = _ocr_with_groq_vision(file_path, extract_style=True)
+                    html_to_docx(html_text, temp_docx_path)
+                except Exception as e:
+                    print(f"Failed to create styled OCR template: {e}")
+                    
+            if os.path.exists(temp_docx_path):
+                from docx import Document
+                doc = Document(temp_docx_path)
+                text_lines = []
+                for p in doc.paragraphs:
+                    text_lines.append(p.text)
+                for t in doc.tables:
+                    for r in t.rows:
+                        text_lines.append("\t".join([cell.text for cell in r.cells]))
+                text = "\n".join(text_lines)
             else:
-                return {"success": False, "error": res.get("error")}
+                res = await extract_ocr_text(file_path)
+                if res.get("success"):
+                    text = res.get("text")
+                else:
+                    return {"success": False, "error": res.get("error")}
                 
         else:
             return {"success": False, "error": f"Cannot load text for file extension: {ext}"}
@@ -461,7 +496,15 @@ async def api_document_save(request: SaveDocumentRequest):
     
     output_filename = f"{name}_edited.{target_format}"
     output_path = os.path.join(output_dir, output_filename)
+        # Determine the docx template path
+    template_docx_path = None
+    original_path = os.path.join(UPLOAD_DIR, os.path.basename(request.filename))
     
+    if original_path.lower().endswith('.docx'):
+        template_docx_path = original_path
+    elif os.path.exists(original_path + ".docx"):
+        template_docx_path = original_path + ".docx"
+
     try:
         if target_format == 'txt':
             with open(output_path, 'w', encoding='utf-8') as f:
@@ -472,10 +515,9 @@ async def api_document_save(request: SaveDocumentRequest):
                 f.write(request.text)
                 
         elif target_format == 'docx':
-            original_path = os.path.join(UPLOAD_DIR, os.path.basename(request.filename))
-            if os.path.exists(original_path) and original_path.lower().endswith('.docx'):
+            if template_docx_path and os.path.exists(template_docx_path):
                 from docx import Document
-                doc = Document(original_path)
+                doc = Document(template_docx_path)
                 
                 lines = request.text.split('\n')
                 line_idx = 0
@@ -510,10 +552,9 @@ async def api_document_save(request: SaveDocumentRequest):
                 doc.save(output_path)
             
         elif target_format == 'pdf':
-            original_path = os.path.join(UPLOAD_DIR, os.path.basename(request.filename))
-            if os.path.exists(original_path) and original_path.lower().endswith('.docx'):
+            if template_docx_path and os.path.exists(template_docx_path):
                 from docx import Document
-                doc = Document(original_path)
+                doc = Document(template_docx_path)
                 
                 lines = request.text.split('\n')
                 line_idx = 0

@@ -87,10 +87,10 @@ def apply_pdf_watermark(pdf_path, text="Smart Document Management"):
                 diagonal = math.sqrt(width**2 + height**2)
                 angle = math.degrees(math.atan2(height, width))
                 
-                # Calculate dynamic font size to span 80% of diagonal
+                # Calculate dynamic font size to span 85% of diagonal
                 font_name = "Helvetica-Bold"
                 base_width = c.stringWidth(text, font_name, 10)
-                font_size = max(16, int((0.80 * diagonal / base_width) * 10))
+                font_size = max(16, int((0.85 * diagonal / base_width) * 10))
                 
                 c.translate(width / 2.0, height / 2.0)
                 c.rotate(angle)
@@ -102,7 +102,8 @@ def apply_pdf_watermark(pdf_path, text="Smart Document Management"):
                 w_docs[size_key] = (fitz.open(temp_w_path), temp_w_path)
                 
             w_doc, temp_w_path = w_docs[size_key]
-            page.show_pdf_page(rect, w_doc, 0)
+            # Overlay=False makes it a background watermark (rendered beneath text and drawings)
+            page.show_pdf_page(rect, w_doc, 0, overlay=False)
             
         temp_out_path = f"{pdf_path}_watermarked.pdf"
         doc.save(temp_out_path)
@@ -188,6 +189,16 @@ def apply_pptx_watermark(pptx_path, text="Smart Document Management"):
         
         for slide in prs.slides:
             txBox = slide.shapes.add_textbox(left, top, width, height)
+            
+            # Send shape to back of the slide visual tree (background)
+            try:
+                spTree = slide.shapes._spTree
+                shape_el = txBox._element
+                spTree.remove(shape_el)
+                spTree.insert(2, shape_el)
+            except:
+                pass
+                
             tf = txBox.text_frame
             tf.word_wrap = True
             

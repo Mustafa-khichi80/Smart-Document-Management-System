@@ -1,0 +1,30 @@
+# Vercel Ignore File
+# Prevents uploading large virtual environments, caches, and temp files to Vercel
+
+venv/
+.venv/
+env/
+__pycache__/
+*.pyc
+*.py[cod]
+.pytest_cache/
+.cache/
+
+temp_uploads/
+converted_files/
+.env
+
+.git/
+.github/
+.vscode/
+*.code-workspace
+.vercel/
+
+# Document templates/tests in root
+original_doc.pdf
+test_morph_watermark.pdf
+test_watermark.pdf
+test_watermarked.docx
+test_watermarked.pptx
+test_watermarked_image.png
+watermarked_doc.pdf

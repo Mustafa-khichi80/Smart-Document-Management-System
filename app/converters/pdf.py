@@ -1,7 +1,8 @@
 """
 PDF Converter - Enhanced Version
 Converts PDF files to DOCX (with formatting), TXT, HTML, MD, RTF, and images.
-Uses pdf2docx for high-quality DOCX conversion.
+Uses pdf2docx for high-quality DOCX conversion, and custom PyMuPDF extraction for fallbacks.
+Preserves layouts, fonts, bold, italic, and underline styling.
 """
 import os
 import asyncio
@@ -86,7 +87,23 @@ def _extract_pdf_text_with_ocr_fallback(input_path: str) -> str:
                 pix = page.get_pixmap(dpi=150)
                 img_data = pix.tobytes("png")
                 img = Image.open(BytesIO(img_data))
-                page_text = pytesseract.image_to_string(img)
+                
+                page_text = ""
+                try:
+                    page_text = pytesseract.image_to_string(img)
+                except Exception as tess_err:
+                    print(f"Tesseract OCR failed on page: {tess_err}. Trying Groq Vision.")
+                    temp_img_path = f"{input_path}_page_ocr_temp.png"
+                    img.save(temp_img_path)
+                    try:
+                        from .ocr import _ocr_with_groq_vision
+                        page_text = _ocr_with_groq_vision(temp_img_path, extract_style=False)
+                    except Exception as groq_err:
+                        print(f"Groq Vision page OCR failed: {groq_err}")
+                    finally:
+                        if os.path.exists(temp_img_path):
+                            os.remove(temp_img_path)
+                            
                 if page_text:
                     ocr_text.append(page_text)
             pdf_doc.close()
@@ -108,13 +125,11 @@ def _pdf_to_docx_fallback(input_path: str, output_path: str, output_filename: st
         pdf_doc = fitz.open(input_path)
         
         for page in pdf_doc:
-            # Extract detailed layout block structure
             text_blocks = page.get_text("dict")["blocks"]
             for block in text_blocks:
                 if block.get("type") == 0:  # Text block
                     p = doc.add_paragraph()
                     
-                    # Group spans within lines
                     for line in block.get("lines", []):
                         for span in line.get("spans", []):
                             text = span.get("text", "")
@@ -123,10 +138,8 @@ def _pdf_to_docx_fallback(input_path: str, output_path: str, output_filename: st
                                 
                             run = p.add_run(text)
                             
-                            # Parse font formatting
                             font_name = span.get("font", "").lower()
                             flags = span.get("flags", 0)
-                            # Flags: bit 4 is Bold, bit 1 is Italic
                             is_bold = bool(flags & 16) or "bold" in font_name or "bd" in font_name
                             is_italic = bool(flags & 2) or "italic" in font_name or "it" in font_name or "oblique" in font_name
                             
@@ -135,19 +148,15 @@ def _pdf_to_docx_fallback(input_path: str, output_path: str, output_filename: st
                             if is_italic:
                                 run.italic = True
                                 
-                            # Set size
                             size = span.get("size", 10)
                             run.font.size = Pt(size)
                             
-                            # Set color
                             color_int = span.get("color", 0)
-                            # PyMuPDF color is an sRGB integer.
                             r = (color_int >> 16) & 255
                             g = (color_int >> 8) & 255
                             b = color_int & 255
                             run.font.color.rgb = RGBColor(r, g, b)
                             
-                            # Standardize Font Name
                             if "times" in font_name:
                                 run.font.name = "Times New Roman"
                             elif "arial" in font_name:
@@ -159,7 +168,7 @@ def _pdf_to_docx_fallback(input_path: str, output_path: str, output_filename: st
                             else:
                                 run.font.name = "Arial"
                                 
-                        p.add_run(" ")  # Add spacing between lines of same block
+                        p.add_run(" ")
         
         pdf_doc.close()
         doc.save(output_path)
@@ -172,12 +181,11 @@ def _pdf_to_docx_fallback(input_path: str, output_path: str, output_filename: st
         }
     except Exception as e:
         print(f"[PDF→DOCX Fallback] High-fidelity method failed: {e}")
-        # Call basic PyPDF2 fallback if PyMuPDF method fails
         return _pdf_to_docx_basic_fallback(input_path, output_path, output_filename, original_error)
 
 
 def _pdf_to_docx_basic_fallback(input_path: str, output_path: str, output_filename: str, original_error: str) -> dict:
-    """Basic Fallback: PDF to DOCX conversion using PyPDF2 + python-docx (runs if high-fidelity method fails)."""
+    """Basic Fallback: PDF to DOCX conversion using PyPDF2 + python-docx."""
     try:
         from docx import Document
         
@@ -214,12 +222,44 @@ def _pdf_to_txt(input_path: str, output_path: str, output_filename: str) -> dict
 
 
 def _pdf_to_html(input_path: str, output_path: str, output_filename: str, name: str) -> dict:
-    """Convert PDF to HTML with OCR fallback."""
-    text_content = _extract_pdf_text_with_ocr_fallback(input_path)
-    if not text_content.strip():
-        return {"success": False, "error": "Could not extract text from PDF (may be image-based and OCR found no text)"}
+    """Convert PDF to HTML preserving formatting and layout using PyMuPDF."""
+    try:
+        import fitz
+        doc = fitz.open(input_path)
+        html_pages = []
+        for page in doc:
+            html_pages.append(page.get_text("html"))
+        doc.close()
+        
+        full_html = f"""<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <title>{name}</title>
+    <style>
+        body {{ font-family: sans-serif; margin: 20px; }}
+        .pdf-page {{ margin-bottom: 30px; border-bottom: 2px dashed #ccc; padding-bottom: 20px; }}
+    </style>
+</head>
+<body>
+"""
+        for page_html in html_pages:
+            full_html += f'<div class="pdf-page">\n{page_html}\n</div>\n'
+        full_html += "</body>\n</html>"
+        
+        with open(output_path, "w", encoding="utf-8") as f:
+            f.write(full_html)
+            
+        return {"success": True, "output_path": output_path, "filename": output_filename}
+        
+    except Exception as e:
+        print(f"[PDF→HTML] PyMuPDF failed: {e}. Falling back to plain text HTML.")
+        
+        text_content = _extract_pdf_text_with_ocr_fallback(input_path)
+        if not text_content.strip():
+            return {"success": False, "error": "Could not extract text from PDF."}
 
-    html_content = f"""<!DOCTYPE html>
+        html_content = f"""<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
@@ -239,51 +279,161 @@ def _pdf_to_html(input_path: str, output_path: str, output_filename: str, name: 
 <body>
     <h1>{name}</h1>
 """
-    for para in text_content.split('\n'):
-        if para.strip():
-            html_content += f"    <p>{para}</p>\n"
-    html_content += "</body>\n</html>"
-    
-    with open(output_path, 'w', encoding='utf-8') as f:
-        f.write(html_content)
-    
-    return {"success": True, "output_path": output_path, "filename": output_filename}
+        for para in text_content.split('\n'):
+            if para.strip():
+                html_content += f"    <p>{para}</p>\n"
+        html_content += "</body>\n</html>"
+        
+        with open(output_path, 'w', encoding='utf-8') as f:
+            f.write(html_content)
+        
+        return {"success": True, "output_path": output_path, "filename": output_filename}
 
 
 def _pdf_to_md(input_path: str, output_path: str, output_filename: str, name: str) -> dict:
-    """Convert PDF to Markdown with OCR fallback."""
-    text_content = _extract_pdf_text_with_ocr_fallback(input_path)
-    if not text_content.strip():
-        return {"success": False, "error": "Could not extract text from PDF (may be image-based and OCR found no text)"}
+    """Convert PDF to Markdown with high-fidelity formatting preservation."""
+    try:
+        import fitz
+        doc = fitz.open(input_path)
+        md_content = f"# {name}\n\n"
+        
+        for page in doc:
+            text_blocks = page.get_text("dict")["blocks"]
+            for block in text_blocks:
+                if block.get("type") == 0:  # Text block
+                    block_text = []
+                    for line in block.get("lines", []):
+                        line_text = ""
+                        for span in line.get("spans", []):
+                            text = span.get("text", "")
+                            if not text.strip():
+                                continue
+                            
+                            flags = span.get("flags", 0)
+                            is_bold = bool(flags & 16) or "bold" in span.get("font", "").lower()
+                            is_italic = bool(flags & 2) or "italic" in span.get("font", "").lower()
+                            
+                            if is_bold and is_italic:
+                                line_text += f" ***{text}***"
+                            elif is_bold:
+                                line_text += f" **{text}**"
+                            elif is_italic:
+                                line_text += f" *{text}*"
+                            else:
+                                line_text += f" {text}"
+                        if line_text:
+                            block_text.append(line_text.strip())
+                    if block_text:
+                        md_content += "\n".join(block_text) + "\n\n"
+        doc.close()
+        
+        with open(output_path, 'w', encoding='utf-8') as f:
+            f.write(md_content)
+            
+        return {"success": True, "output_path": output_path, "filename": output_filename}
+        
+    except Exception as e:
+        print(f"[PDF→MD] PyMuPDF failed: {e}. Falling back to plain text Markdown.")
+        
+        text_content = _extract_pdf_text_with_ocr_fallback(input_path)
+        if not text_content.strip():
+            return {"success": False, "error": "Could not extract text from PDF."}
 
-    md_content = f"# {name}\n\n"
-    for para in text_content.split('\n'):
-        if para.strip():
-            md_content += f"{para}\n\n"
-    
-    with open(output_path, 'w', encoding='utf-8') as f:
-        f.write(md_content)
-    
-    return {"success": True, "output_path": output_path, "filename": output_filename}
+        md_content = f"# {name}\n\n"
+        for para in text_content.split('\n'):
+            if para.strip():
+                md_content += f"{para}\n\n"
+        
+        with open(output_path, 'w', encoding='utf-8') as f:
+            f.write(md_content)
+        
+        return {"success": True, "output_path": output_path, "filename": output_filename}
 
 
 def _pdf_to_rtf(input_path: str, output_path: str, output_filename: str) -> dict:
-    """Convert PDF to RTF with OCR fallback."""
-    text_content = _extract_pdf_text_with_ocr_fallback(input_path)
-    if not text_content.strip():
-        return {"success": False, "error": "Could not extract text from PDF (may be image-based and OCR found no text)"}
+    """Convert PDF to RTF with formatting preservation."""
+    try:
+        import fitz
+        doc = fitz.open(input_path)
+        rtf_content = "{\\rtf1\\ansi\\deff0\n"
+        
+        for page in doc:
+            text_blocks = page.get_text("dict")["blocks"]
+            for block in text_blocks:
+                if block.get("type") == 0:  # Text block
+                    block_text = ""
+                    for line in block.get("lines", []):
+                        line_text = ""
+                        for span in line.get("spans", []):
+                            text = span.get("text", "")
+                            if not text:
+                                continue
+                            
+                            flags = span.get("flags", 0)
+                            is_bold = bool(flags & 16) or "bold" in span.get("font", "").lower()
+                            is_italic = bool(flags & 2) or "italic" in span.get("font", "").lower()
+                            
+                            # Unicode RTF escaping
+                            escaped = ""
+                            for char in text:
+                                cp = ord(char)
+                                if cp < 128:
+                                    if char in ['\\', '{', '}']:
+                                        escaped += '\\' + char
+                                    else:
+                                        escaped += char
+                                else:
+                                    escaped += f"\\u{cp}?"
+                                    
+                            prefix = ""
+                            suffix = ""
+                            if is_bold:
+                                prefix += "\\b "
+                                suffix += "\\b0 "
+                            if is_italic:
+                                prefix += "\\i "
+                                suffix += "\\i0 "
+                                
+                            line_text += f"{prefix}{escaped}{suffix}"
+                        if line_text:
+                            block_text += line_text + " "
+                    if block_text:
+                        rtf_content += f"\\par {block_text}\n"
+        rtf_content += "}"
+        doc.close()
+        
+        with open(output_path, 'w', encoding='utf-8') as f:
+            f.write(rtf_content)
+            
+        return {"success": True, "output_path": output_path, "filename": output_filename}
+        
+    except Exception as e:
+        print(f"[PDF→RTF] PyMuPDF failed: {e}. Falling back to plain text RTF.")
+        
+        text_content = _extract_pdf_text_with_ocr_fallback(input_path)
+        if not text_content.strip():
+            return {"success": False, "error": "Could not extract text from PDF."}
 
-    rtf_content = "{\\rtf1\\ansi\\deff0\n"
-    for para in text_content.split('\n'):
-        if para.strip():
-            escaped = para.encode('unicode_escape').decode('ascii')
-            rtf_content += f"\\par {escaped}\n"
-    rtf_content += "}"
-    
-    with open(output_path, 'w', encoding='utf-8') as f:
-        f.write(rtf_content)
-    
-    return {"success": True, "output_path": output_path, "filename": output_filename}
+        rtf_content = "{\\rtf1\\ansi\\deff0\n"
+        for para in text_content.split('\n'):
+            if para.strip():
+                escaped = ""
+                for char in para:
+                    cp = ord(char)
+                    if cp < 128:
+                        if char in ['\\', '{', '}']:
+                            escaped += '\\' + char
+                        else:
+                            escaped += char
+                    else:
+                        escaped += f"\\u{cp}?"
+                rtf_content += f"\\par {escaped}\n"
+        rtf_content += "}"
+        
+        with open(output_path, 'w', encoding='utf-8') as f:
+            f.write(rtf_content)
+        
+        return {"success": True, "output_path": output_path, "filename": output_filename}
 
 
 def _pdf_to_images(input_path: str, output_dir: str, target_format: str, name: str) -> dict:
@@ -299,7 +449,6 @@ def _pdf_to_images(input_path: str, output_dir: str, target_format: str, name: s
         
         for page_num in range(len(pdf_doc)):
             page = pdf_doc[page_num]
-            # Higher resolution for better quality (2x = 144 DPI)
             mat = fitz.Matrix(2.0, 2.0)
             pix = page.get_pixmap(matrix=mat)
             

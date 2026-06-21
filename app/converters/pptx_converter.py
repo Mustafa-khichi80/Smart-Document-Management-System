@@ -70,7 +70,7 @@ def _pptx_to_pdf(input_path: str, output_path: str, output_filename: str) -> dic
                     shutil.move(expected_output, output_path)
                 return {"success": True, "output_path": output_path, "filename": output_filename}
     except Exception as e:
-        print(f"[PPTX→PDF] LibreOffice failed: {e}")
+        print(f"[PPTX->PDF] LibreOffice failed: {e}")
     
     # Method 2: Try PowerPoint COM (Windows only)
     try:
@@ -89,7 +89,7 @@ def _pptx_to_pdf(input_path: str, output_path: str, output_filename: str) -> dic
             if os.path.exists(output_path):
                 return {"success": True, "output_path": output_path, "filename": output_filename}
     except Exception as e:
-        print(f"[PPTX→PDF] PowerPoint COM failed: {e}")
+        print(f"[PPTX->PDF] PowerPoint COM failed: {e}")
     
     # Method 3: Python-only fallback (ReportLab) - used when PowerPoint/LibreOffice are missing (e.g. on Vercel)
     try:
@@ -193,8 +193,25 @@ def _pptx_to_pdf(input_path: str, output_path: str, output_filename: str) -> dic
                 
                 # 2. Table Shapes
                 elif hasattr(shape, "has_table") and shape.has_table:
-                    for r_idx, row in enumerate(shape.table.rows):
+                    from reportlab.platypus import Table, TableStyle
+                    from reportlab.lib import colors
+                    
+                    table_data = []
+                    t_styles = [
+                        ('VALIGN', (0,0), (-1,-1), 'TOP'),
+                        ('GRID', (0,0), (-1,-1), 0.5, colors.grey),
+                        ('TOPPADDING', (0,0), (-1,-1), 4),
+                        ('BOTTOMPADDING', (0,0), (-1,-1), 4),
+                        ('LEFTPADDING', (0,0), (-1,-1), 4),
+                        ('RIGHTPADDING', (0,0), (-1,-1), 4),
+                    ]
+                    
+                    t_obj = shape.table
+                    
+                    for r_idx, row in enumerate(t_obj.rows):
+                        row_data = []
                         for c_idx, cell in enumerate(row.cells):
+                            cell_paragraphs = []
                             for p_idx, paragraph in enumerate(cell.text_frame.paragraphs):
                                 p_html = ""
                                 for run in paragraph.runs:
@@ -209,8 +226,11 @@ def _pptx_to_pdf(input_path: str, output_path: str, output_filename: str) -> dic
                                     if run.font.size:
                                         font_attrs.append(f'size="{run.font.size.pt}"')
                                     if run.font.color and run.font.color.type == 1:
-                                        hex_color = f"#{run.font.color.rgb}"
-                                        font_attrs.append(f'color="{hex_color}"')
+                                        try:
+                                            hex_color = f"#{run.font.color.rgb}"
+                                            font_attrs.append(f'color="{hex_color}"')
+                                        except:
+                                            pass
                                     if run.font.name:
                                         font_name = run.font.name.lower()
                                         if "times" in font_name:
@@ -236,22 +256,29 @@ def _pptx_to_pdf(input_path: str, output_path: str, output_filename: str) -> dic
                                         
                                     p_html += f"{tags_start}{text}{tags_end}"
                                 
-                                if p_html.strip():
-                                    align_val = 0
-                                    if paragraph.alignment == 2:
-                                        align_val = 1
-                                    elif paragraph.alignment == 3:
-                                        align_val = 2
-                                    elif paragraph.alignment == 4:
-                                        align_val = 4
-                                        
-                                    p_style = ParagraphStyle(
-                                        f'TStyle_{idx}_{r_idx}_{c_idx}_{p_idx}',
-                                        parent=body_style,
-                                        alignment=align_val
-                                    )
-                                    label = f"[{r_idx+1},{c_idx+1}] " if p_idx == 0 else ""
-                                    story.append(Paragraph(f"{label}{p_html}", p_style))
+                                align_val = 0
+                                if paragraph.alignment == 2:
+                                    align_val = 1
+                                elif paragraph.alignment == 3:
+                                    align_val = 2
+                                elif paragraph.alignment == 4:
+                                    align_val = 4
+                                    
+                                p_style = ParagraphStyle(
+                                    f'TStyle_{idx}_{r_idx}_{c_idx}_{p_idx}',
+                                    parent=body_style,
+                                    alignment=align_val
+                                )
+                                cell_paragraphs.append(Paragraph(p_html or "&nbsp;", p_style))
+                            row_data.append(cell_paragraphs)
+                        table_data.append(row_data)
+                    
+                    if table_data:
+                        rl_table = Table(table_data)
+                        rl_table.setStyle(TableStyle(t_styles))
+                        story.append(Spacer(1, 10))
+                        story.append(rl_table)
+                        story.append(Spacer(1, 10))
             
         pdf.build(story)
         if os.path.exists(output_path):
@@ -262,7 +289,7 @@ def _pptx_to_pdf(input_path: str, output_path: str, output_filename: str) -> dic
                 "note": "Converted using ReportLab fallback (PowerPoint/LibreOffice missing)"
             }
     except Exception as fallback_err:
-        print(f"[PPTX→PDF] Fallback failed: {fallback_err}")
+        print(f"[PPTX->PDF] Fallback failed: {fallback_err}")
     
     return {
         "success": False, 
